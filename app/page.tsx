@@ -427,7 +427,7 @@ const styles: any = {
   timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "22px" },
 
   timelineRow: { marginTop: 30, padding: "0 10%" },
-  label: { color: "red", fontWeight: "bold",  textAlign: "center", fontSize: "20px", marginBottom: "33px" },
+  label: { color: "red", fontWeight: "bold",  textAlign: "center", fontSize: "20px", marginBottom: "50px" },
   
   responsiveGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "30px 10px" },
   phaseContainer: { marginBottom: "20px" },
