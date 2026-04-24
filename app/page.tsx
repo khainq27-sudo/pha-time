@@ -114,7 +114,7 @@ export default function Home() {
   if (now < startDay) startDay.setDate(startDay.getDate() - 1);
   const endDay = new Date(startDay.getTime() + 86400000);
 
-  const makeRange = (days) => ({
+  const makeRange = (days: number) => ({
     start: new Date(startDay.getTime() - (days - 1) * 86400000),
     end: endDay,
   });
