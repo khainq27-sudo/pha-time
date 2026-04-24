@@ -1,65 +1,312 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState } from "react";
 
 export default function Home() {
+  const [time, setTime] = useState("");
+  const [price, setPrice] = useState("");
+  const [prevPrice, setPrevPrice] = useState("");
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const current = new Date();
+
+      const formatted = current.toLocaleString("vi-VN", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+
+      setTime(formatted);
+      setNow(current);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
+
+    ws.onopen = () => {
+      ws.send(
+        JSON.stringify({
+          op: "subscribe",
+          args: [{ channel: "tickers", instId: "BTC-USDT" }],
+        })
+      );
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.data) {
+        setPrevPrice(price);
+        setPrice(data.data[0].last);
+      }
+    };
+
+    return () => ws.close();
+  }, []);
+
+  const getProgress = (start, end) =>
+    ((now - start) / (end - start)) * 100;
+
+  const createPhaseTicks = (start, end) => {
+    const ticks = [];
+    const totalParts = 16;
+    const step = (end - start) / totalParts;
+
+    for (let i = 0; i <= totalParts; i++) {
+      const t = new Date(start.getTime() + step * i);
+      ticks.push({
+        label: t.toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+        }),
+        hour: t.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        percent: (i / totalParts) * 100,
+      });
+    }
+    return ticks;
+  };
+
+  // ===== NĂM =====
+  const startYear = new Date(now.getFullYear(), 0, 1, 7);
+  const endYear = new Date(now.getFullYear() + 1, 0, 1, 7);
+
+  // ===== 6 THÁNG =====
+  const isFirstHalf = now.getMonth() < 6;
+  const startHalf = isFirstHalf
+    ? new Date(now.getFullYear(), 0, 1, 7)
+    : new Date(now.getFullYear(), 6, 1, 7);
+  const endHalf = isFirstHalf
+    ? new Date(now.getFullYear(), 6, 1, 7)
+    : new Date(now.getFullYear() + 1, 0, 1, 7);
+
+  // ===== 3 THÁNG =====
+  const quarterStart = new Date(
+    now.getFullYear(),
+    Math.floor(now.getMonth() / 3) * 3,
+    1,
+    7
+  );
+  const quarterEnd = new Date(
+    now.getFullYear(),
+    Math.floor(now.getMonth() / 3) * 3 + 3,
+    1,
+    7
+  );
+  // ===== 1 THÁNG =====
+  const startMonth = new Date(now.getFullYear(), now.getMonth(), 1, 7);
+  const endMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1, 7);
+  // ===== OKX DAY (7h) =====
+  const startDay = new Date(now);
+  startDay.setHours(7, 0, 0, 0);
+  if (now < startDay) startDay.setDate(startDay.getDate() - 1);
+  const endDay = new Date(startDay.getTime() + 86400000);
+
+  const makeRange = (days) => ({
+    start: new Date(startDay.getTime() - (days - 1) * 86400000),
+    end: endDay,
+  });
+
+  // ===== CUSTOM TIME =====
+
+  // Tuần: 7:00 20/4
+  const d7 = {
+  start: new Date(now.getFullYear(), 3, 20, 7),
+  end: new Date(now.getFullYear(), 3, 20, 7 + 24 * 7),
+  };
+
+  // 5 ngày: 7:00 22/4
+  const d5 = {
+  start: new Date(now.getFullYear(), 3, 22, 7),
+  end: new Date(now.getFullYear(), 3, 22, 7 + 24 * 5),
+  };
+
+  // 3 ngày: 7:00 22/4
+  const d3 = {
+  start: new Date(now.getFullYear(), 3, 22, 7),
+  end: new Date(now.getFullYear(), 3, 22, 7 + 24 * 3),
+  };
+
+  // 2 ngày: 7:00 23/4
+  const d2 = {
+  start: new Date(now.getFullYear(), 3, 23, 7),
+  end: new Date(now.getFullYear(), 3, 23, 7 + 24 * 2),
+};
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <h1 style={styles.title}>
+          <span style={styles.qkay}>QKAY</span> - BMAGVN - PHA THỜI GIAN
+        </h1>
+        <p style={styles.time}>Thời gian hiện tại: {time}</p>
+      </div>
+
+      <div style={styles.leftSection}>
+        <div style={styles.candleBox}>
+          <div style={styles.candleIcon}>
+            <div style={styles.wick}></div>
+            <div style={styles.body}></div>
+          </div>
+
+          <div>
+            <div style={styles.candleTitle}>THÔNG TIN NẾN</div>
+            <div style={styles.market}>Bitcoin / USDT</div>
+            <div
+  style={{
+    ...styles.price,
+    color:
+      price > prevPrice
+        ? "#22c55e"
+        : price < prevPrice
+        ? "#ef4444"
+        : "#111",
+  }}
+>
+  {price} USDT
+</div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </div>
+
+      <div style={styles.timeFrameBox}>
+        <div style={styles.clockIcon}>
+          <div style={styles.clockCircle}></div>
+          <div style={styles.hourHand}></div>
+          <div style={styles.minuteHand}></div>
         </div>
-      </main>
+        <div style={styles.timeFrameTitle}>KHUNG THỜI GIAN</div>
+      </div>
+
+      <Timeline title="Năm" start={startYear} end={endYear} now={now} />
+      <Timeline title="6 Tháng" start={startHalf} end={endHalf} now={now} />
+      <Timeline title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} />
+      <Timeline title="1 Tháng" start={startMonth} end={endMonth} now={now} />
+      <Timeline title="Tuần" start={d7.start} end={d7.end} now={now} />
+      <Timeline title="5 Ngày" start={d5.start} end={d5.end} now={now} />
+      <Timeline title="3 Ngày" start={d3.start} end={d3.end} now={now} />
+      <Timeline title="2 Ngày" start={d2.start} end={d2.end} now={now} />
+      <Timeline title="1 Ngày" start={startDay} end={endDay} now={now} />
     </div>
   );
 }
+
+// ===== COMPONENT =====
+function Timeline({ title, start, end, now }) {
+  const progress = ((now - start) / (end - start)) * 100;
+  const ticks = [];
+
+  const total = 16;
+  const currentPart = Math.floor(progress / (100 / total));
+  const step = (end - start) / total;
+
+  for (let i = 0; i <= total; i++) {
+    const t = new Date(start.getTime() + step * i);
+    ticks.push({
+      percent: (i / total) * 100,
+      label: t.toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+      }),
+      hour: t.toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    });
+  }
+
+  return (
+    <div style={styles.timelineRow}>
+      <div style={styles.label}>{title}</div>
+
+      <div style={styles.timelineContent}>
+        {ticks.map((t, i) => (
+          <div key={i} style={{ ...styles.tick, left: `${t.percent}%` }}>
+            <div>{t.label}</div>
+            <div>{t.hour}</div>
+            <div style={styles.dot}></div>
+          </div>
+        ))}
+
+        <div style={styles.bar}>
+  {[...Array(4)].map((_, i) => (
+    <div
+      key={i}
+      style={{
+        ...styles.part,
+        background: ["#93c5fd", "#86efac", "#fef08a", "#f9a8d4"][i],
+        opacity: Math.floor(currentPart / 4) === i ? 1 : 0.4,
+        transform:
+          Math.floor(currentPart / 4) === i ? "scaleY(1.1)" : "scaleY(1)",
+      }}
+    />
+  ))}
+
+          <div style={{ ...styles.line, left: `${progress}%` }}></div>
+        </div>
+
+        <div style={{ ...styles.now, left: `${progress}%` }}>NOW</div>
+      </div>
+    </div>
+  );
+}
+
+// ===== STYLE =====
+const styles = {
+  container: { background: "#fff", minHeight: "100vh" },
+  header: { textAlign: "center", paddingTop: 20 },
+  title: { fontSize: 34, fontWeight: "bold" },
+  qkay: { color: "#2563eb" },
+  time: { color: "#2563eb" },
+
+  leftSection: { paddingLeft: 40, marginTop: 30 },
+  candleBox: { display: "flex", gap: 12 },
+  candleIcon: { position: "relative", width: 12, height: 30 },
+  wick: { width: 2, height: 30, background: "#555", position: "absolute", left: "50%", transform: "translateX(-50%)" },
+  body: { width: 10, height: 14, background: "#22c55e", position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)" },
+
+  candleTitle: { color: "#a855f7", fontWeight: "bold", fontSize: 20 },
+  market: { color: "#6b7280" },
+  price: { fontSize: 20, fontWeight: "bold" },
+
+  timeFrameBox: { display: "flex", gap: 10, paddingLeft: 40, marginTop: 30 },
+  clockIcon: { position: "relative", width: 24, height: 24 },
+  clockCircle: { border: "2px solid #555", borderRadius: "50%", width: "100%", height: "100%" },
+  hourHand: { width: 2, height: 7, background: "#555", position: "absolute", top: 5, left: "50%", transform: "translateX(-50%)" },
+  minuteHand: { width: 2, height: 10, background: "#555", position: "absolute", top: 2, left: "50%", transform: "translateX(-50%) rotate(45deg)" },
+
+  timeFrameTitle: { color: "#a855f7", fontWeight: "bold" },
+
+  timelineRow: { display: "flex", alignItems: "center", marginTop: 60, padding: "0 40px", gap: 20 },
+  label: { width: 120, color: "red", fontWeight: "bold" },
+  timelineContent: { position: "relative", width: "80%" },
+
+  bar: { display: "flex", width: "100%", height: 50, borderRadius: 10, overflow: "hidden", marginTop: 20, border: "2px solid #94a3b8" },
+  part: { flex: 1 },
+  line: { position: "absolute", top: 0, bottom: 0, width: 2, background: "red" },
+
+  tick: { position: "absolute", top: -30, transform: "translateX(-50%)", fontSize: 10, textAlign: "center" },
+  dot: { width: 6, height: 6, background: "#333", borderRadius: "50%", margin: "3px auto" },
+
+  now: {
+    position: "absolute",
+    bottom: -25,
+    transform: "translateX(-50%)",
+    background: "red",
+    color: "#fff",
+    fontSize: 10,
+    padding: "2px 6px",
+    borderRadius: 4,
+  },
+};
+
+
