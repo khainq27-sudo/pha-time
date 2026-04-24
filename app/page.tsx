@@ -221,7 +221,6 @@ function Timeline({
   const totalTicks = 16;
   const step = (end.getTime() - start.getTime()) / totalTicks;
 
-  // Chia 16 phần thành 4 nhóm (mỗi nhóm 4 phần)
   const phases = [
     { label: "1/4 đầu", color: "#93c5fd", range: [0, 4] },
     { label: "1/4 thứ 2", color: "#86efac", range: [4, 8] },
@@ -238,9 +237,7 @@ function Timeline({
           const phaseStartPercent = (startIdx / totalTicks) * 100;
           const phaseEndPercent = (endIdx / totalTicks) * 100;
           
-          // Kiểm tra xem kim "NOW" có nằm trong đoạn này không
           const isNowInPhase = progress >= phaseStartPercent && progress < phaseEndPercent;
-          // Tính vị trí kim NOW tương đối trong đoạn 1/4 này
           const relativeProgress = ((progress - phaseStartPercent) / (phaseEndPercent - phaseStartPercent)) * 100;
 
           const ticks = [];
@@ -258,8 +255,13 @@ function Timeline({
               <div style={styles.timelineContent}>
                 {ticks.map((t, i) => (
                   <div key={i} style={{ ...styles.tick, left: `${t.percent}%` }}>
-                    <div>{t.label}</div>
-                    <div>{t.hour}</div>
+                    {/* CHỈ SỬA ĐÚNG DÒNG NÀY: Nếu không phải mốc đầu (i=0) và mốc cuối (i=4) thì mới hiện chữ */}
+                    {i !== 0 && i !== ticks.length - 1 && (
+                      <>
+                        <div>{t.label}</div>
+                        <div>{t.hour}</div>
+                      </>
+                    )}
                     <div style={styles.dot}></div>
                   </div>
                 ))}
@@ -272,7 +274,6 @@ function Timeline({
                     </>
                   )}
                 </div>
-                {/* Hiển thị ngày giờ bắt đầu và kết thúc ở dưới bar như hình mẫu */}
                 <div style={styles.rangeTextContainer}>
                   <span>{ticks[0].label} {ticks[0].hour}</span>
                   <span>{ticks[ticks.length-1].label} {ticks[ticks.length-1].hour}</span>
@@ -310,14 +311,14 @@ const styles: any = {
   minuteHand: { width: 2, height: 10, background: "#555", position: "absolute", top: 2, left: "50%", transform: "translateX(-50%) rotate(45deg)" },
   timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "22px" },
 
-  timelineRow: { marginTop: 30, padding: "0 15px" },
-  label: { color: "red", fontWeight: "bold", textAlign: "center", fontSize: "20px", marginBottom: "35px" },
+  timelineRow: { marginTop: 30, padding: "0 10%" },
+  label: { color: "red", fontWeight: "bold", textAlign: "center", fontSize: "20px", marginBottom: "20px" },
   
   // Responsive Grid: Trên PC hiện 1 dòng (4 cột), trên điện thoại tự xuống dòng
   responsiveGrid: { 
     display: "grid", 
     gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", 
-    gap: "50px 20px" 
+    gap: "30px 7px" 
   },
 
   phaseContainer: { marginBottom: "20px" },
