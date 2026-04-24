@@ -278,7 +278,7 @@ function Timeline({
 }
 
 // ===== STYLE =====
-const styles = {
+const styles: any = {
   container: { background: "#fff", minHeight: "100vh" },
   header: { textAlign: "center", paddingTop: 20 },
   title: { fontSize: 34, fontWeight: "bold" },
