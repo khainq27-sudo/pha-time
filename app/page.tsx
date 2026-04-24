@@ -51,10 +51,39 @@ export default function Home() {
     return () => ws.close();
   }, []);
 
-  // ===== TIME =====
+  const getProgress = (start: Date, end: Date) =>
+  ((now.getTime() - start.getTime()) /
+    (end.getTime() - start.getTime())) *
+  100;
+
+  const createPhaseTicks = (start: Date, end: Date) => {
+    const ticks = [];
+    const totalParts = 16;
+    const step =
+  (end.getTime() - start.getTime()) / totalParts;
+
+    for (let i = 0; i <= totalParts; i++) {
+      const t = new Date(start.getTime() + step * i);
+      ticks.push({
+        label: t.toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+        }),
+        hour: t.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        percent: (i / totalParts) * 100,
+      });
+    }
+    return ticks;
+  };
+
+  // ===== NĂM =====
   const startYear = new Date(now.getFullYear(), 0, 1, 7);
   const endYear = new Date(now.getFullYear() + 1, 0, 1, 7);
 
+  // ===== 6 THÁNG =====
   const isFirstHalf = now.getMonth() < 6;
   const startHalf = isFirstHalf
     ? new Date(now.getFullYear(), 0, 1, 7)
@@ -63,6 +92,7 @@ export default function Home() {
     ? new Date(now.getFullYear(), 6, 1, 7)
     : new Date(now.getFullYear() + 1, 0, 1, 7);
 
+  // ===== 3 THÁNG =====
   const quarterStart = new Date(
     now.getFullYear(),
     Math.floor(now.getMonth() / 3) * 3,
@@ -75,34 +105,45 @@ export default function Home() {
     1,
     7
   );
-
+  // ===== 1 THÁNG =====
   const startMonth = new Date(now.getFullYear(), now.getMonth(), 1, 7);
   const endMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1, 7);
-
+  // ===== OKX DAY (7h) =====
   const startDay = new Date(now);
   startDay.setHours(7, 0, 0, 0);
   if (now < startDay) startDay.setDate(startDay.getDate() - 1);
   const endDay = new Date(startDay.getTime() + 86400000);
 
+  const makeRange = (days: number) => ({
+    start: new Date(startDay.getTime() - (days - 1) * 86400000),
+    end: endDay,
+  });
+
+  // ===== CUSTOM TIME =====
+
+  // Tuần: 7:00 20/4
   const d7 = {
-    start: new Date(now.getFullYear(), 3, 20, 7),
-    end: new Date(now.getFullYear(), 3, 20, 7 + 24 * 7),
+  start: new Date(now.getFullYear(), 3, 20, 7),
+  end: new Date(now.getFullYear(), 3, 20, 7 + 24 * 7),
   };
 
+  // 5 ngày: 7:00 22/4
   const d5 = {
-    start: new Date(now.getFullYear(), 3, 22, 7),
-    end: new Date(now.getFullYear(), 3, 22, 7 + 24 * 5),
+  start: new Date(now.getFullYear(), 3, 22, 7),
+  end: new Date(now.getFullYear(), 3, 22, 7 + 24 * 5),
   };
 
+  // 3 ngày: 7:00 22/4
   const d3 = {
-    start: new Date(now.getFullYear(), 3, 22, 7),
-    end: new Date(now.getFullYear(), 3, 22, 7 + 24 * 3),
+  start: new Date(now.getFullYear(), 3, 22, 7),
+  end: new Date(now.getFullYear(), 3, 22, 7 + 24 * 3),
   };
 
+  // 2 ngày: 7:00 23/4
   const d2 = {
-    start: new Date(now.getFullYear(), 3, 23, 7),
-    end: new Date(now.getFullYear(), 3, 23, 7 + 24 * 2),
-  };
+  start: new Date(now.getFullYear(), 3, 23, 7),
+  end: new Date(now.getFullYear(), 3, 23, 7 + 24 * 2),
+};
 
   return (
     <div style={styles.container}>
@@ -111,6 +152,42 @@ export default function Home() {
           <span style={styles.qkay}>QKAY</span> - BMAGVN - PHA THỜI GIAN
         </h1>
         <p style={styles.time}>Thời gian hiện tại: {time}</p>
+      </div>
+
+      <div style={styles.leftSection}>
+        <div style={styles.candleBox}>
+          <div style={styles.candleIcon}>
+            <div style={styles.wick}></div>
+            <div style={styles.body}></div>
+          </div>
+
+          <div>
+            <div style={styles.candleTitle}>THÔNG TIN NẾN</div>
+            <div style={styles.market}>Bitcoin / USDT</div>
+            <div
+  style={{
+    ...styles.price,
+    color:
+      price > prevPrice
+        ? "#22c55e"
+        : price < prevPrice
+        ? "#ef4444"
+        : "#111",
+  }}
+>
+  {price} USDT
+</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={styles.timeFrameBox}>
+        <div style={styles.clockIcon}>
+          <div style={styles.clockCircle}></div>
+          <div style={styles.hourHand}></div>
+          <div style={styles.minuteHand}></div>
+        </div>
+        <div style={styles.timeFrameTitle}>KHUNG THỜI GIAN</div>
       </div>
 
       <Timeline title="Năm" start={startYear} end={endYear} now={now} />
@@ -126,20 +203,28 @@ export default function Home() {
   );
 }
 
-// ===== TIMELINE =====
-function Timeline({ title, start, end, now }: any) {
+// ===== COMPONENT =====
+function Timeline({
+  title,
+  start,
+  end,
+  now,
+}: {
+  title: string;
+  start: Date;
+  end: Date;
+  now: Date;
+}) {
   const progress =
-    ((now.getTime() - start.getTime()) /
-      (end.getTime() - start.getTime())) *
-    100;
-
-  const isMobile =
-    typeof window !== "undefined" && window.innerWidth < 600;
-
-  const total = isMobile ? 8 : 16;
-
+  ((now.getTime() - start.getTime()) /
+    (end.getTime() - start.getTime())) *
+  100;
   const ticks = [];
-  const step = (end.getTime() - start.getTime()) / total;
+
+  const total = 16;
+  const currentPart = Math.floor(progress / (100 / total));
+  const step =
+  (end.getTime() - start.getTime()) / total;
 
   for (let i = 0; i <= total; i++) {
     const t = new Date(start.getTime() + step * i);
@@ -156,33 +241,32 @@ function Timeline({ title, start, end, now }: any) {
     });
   }
 
-  const currentPart = Math.floor(progress / (100 / 16));
-
   return (
     <div style={styles.timelineRow}>
-      {/* LABEL TRÊN GIỮA */}
-      <div style={styles.centerLabel}>{title}</div>
+      <div style={styles.label}>{title}</div>
 
       <div style={styles.timelineContent}>
-        {ticks.map((t: any, i: number) => (
+        {ticks.map((t, i) => (
           <div key={i} style={{ ...styles.tick, left: `${t.percent}%` }}>
             <div>{t.label}</div>
-            {!isMobile && <div>{t.hour}</div>}
+            <div>{t.hour}</div>
             <div style={styles.dot}></div>
           </div>
         ))}
 
         <div style={styles.bar}>
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              style={{
-                ...styles.part,
-                background: ["#93c5fd", "#86efac", "#fef08a", "#f9a8d4"][i],
-                opacity: Math.floor(currentPart / 4) === i ? 1 : 0.4,
-              }}
-            />
-          ))}
+  {[...Array(4)].map((_, i) => (
+    <div
+      key={i}
+      style={{
+        ...styles.part,
+        background: ["#93c5fd", "#86efac", "#fef08a", "#f9a8d4"][i],
+        opacity: Math.floor(currentPart / 4) === i ? 1 : 0.4,
+        transform:
+          Math.floor(currentPart / 4) === i ? "scaleY(1.1)" : "scaleY(1)",
+      }}
+    />
+  ))}
 
           <div style={{ ...styles.line, left: `${progress}%` }}></div>
         </div>
@@ -195,76 +279,50 @@ function Timeline({ title, start, end, now }: any) {
 
 // ===== STYLE =====
 const styles: any = {
-  container: { padding: 10 },
-
-  header: { textAlign: "center" },
-
-  title: { fontSize: "clamp(18px,4vw,34px)", fontWeight: "bold" },
-
+  container: { background: "#fff", minHeight: "100vh" },
+  header: { textAlign: "center", paddingTop: 20 },
+  title: { fontSize: 34, fontWeight: "bold" },
   qkay: { color: "#2563eb" },
+  time: { color: "#2563eb" },
 
-  time: { fontSize: "clamp(12px,3vw,16px)" },
+  leftSection: { paddingLeft: 40, marginTop: 30 },
+  candleBox: { display: "flex", gap: 12 },
+  candleIcon: { position: "relative", width: 12, height: 30 },
+  wick: { width: 2, height: 30, background: "#555", position: "absolute", left: "50%", transform: "translateX(-50%)" },
+  body: { width: 10, height: 14, background: "#22c55e", position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)" },
 
-  timelineRow: {
-    marginTop: 50,
-    padding: "0 clamp(10px,4vw,40px)",
-    position: "relative",
-  },
+  candleTitle: { color: "#a855f7", fontWeight: "bold", fontSize: 20 },
+  market: { color: "#6b7280" },
+  price: { fontSize: 20, fontWeight: "bold" },
 
-  centerLabel: {
-    textAlign: "center",
-    fontWeight: "bold",
-    color: "red",
-    marginBottom: 25,
-    fontSize: "clamp(14px,3vw,18px)",
-  },
+  timeFrameBox: { display: "flex", gap: 10, paddingLeft: 40, marginTop: 30 },
+  clockIcon: { position: "relative", width: 24, height: 24 },
+  clockCircle: { border: "2px solid #555", borderRadius: "50%", width: "100%", height: "100%" },
+  hourHand: { width: 2, height: 7, background: "#555", position: "absolute", top: 5, left: "50%", transform: "translateX(-50%)" },
+  minuteHand: { width: 2, height: 10, background: "#555", position: "absolute", top: 2, left: "50%", transform: "translateX(-50%) rotate(45deg)" },
 
-  timelineContent: {
-    position: "relative",
-  },
+  timeFrameTitle: { color: "#a855f7", fontWeight: "bold" },
 
-  bar: {
-    display: "flex",
-    height: "clamp(30px,6vw,50px)",
-    borderRadius: 10,
-    overflow: "hidden",
-    border: "2px solid #94a3b8",
-  },
+  timelineRow: { display: "flex", alignItems: "center", marginTop: 60, padding: "0 40px", gap: 20 },
+  label: { width: 120, color: "red", fontWeight: "bold" },
+  timelineContent: { position: "relative", width: "80%" },
 
+  bar: { display: "flex", width: "100%", height: 50, borderRadius: 10, overflow: "hidden", marginTop: 20, border: "2px solid #94a3b8" },
   part: { flex: 1 },
+  line: { position: "absolute", top: 0, bottom: 0, width: 2, background: "red" },
 
-  line: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    width: 2,
-    background: "red",
-  },
-
-  tick: {
-    position: "absolute",
-    top: -30,
-    transform: "translateX(-50%)",
-    fontSize: "clamp(8px,2vw,10px)",
-    textAlign: "center",
-  },
-
-  dot: {
-    width: 5,
-    height: 5,
-    background: "#333",
-    borderRadius: "50%",
-    margin: "2px auto",
-  },
+  tick: { position: "absolute", top: -30, transform: "translateX(-50%)", fontSize: 10, textAlign: "center" },
+  dot: { width: 6, height: 6, background: "#333", borderRadius: "50%", margin: "3px auto" },
 
   now: {
     position: "absolute",
-    bottom: -20,
+    bottom: -25,
     transform: "translateX(-50%)",
     background: "red",
     color: "#fff",
     fontSize: 10,
-    padding: "2px 4px",
+    padding: "2px 6px",
     borderRadius: 4,
   },
 };
+
