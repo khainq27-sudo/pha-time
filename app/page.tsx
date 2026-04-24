@@ -276,7 +276,7 @@ function Timeline({
   );
 }
 
-// ===== STYLE ĐÃ ĐƯỢC NÂNG CẤP RESPONSIVE BẰNG CLAMP() =====
+// ===== ĐÂY LÀ PHẦN STYLE MỚI - BẠN DÁN ĐÈ VÀO CUỐI FILE =====
 const styles: any = {
   container: { background: "#fff", minHeight: "100vh", overflowX: "hidden", paddingBottom: "40px" },
   header: { textAlign: "center", paddingTop: 20, paddingInline: "10px" },
@@ -302,33 +302,40 @@ const styles: any = {
 
   timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "clamp(18px, 4vw, 24px)" },
 
-  timelineRow: { display: "flex", alignItems: "center", flexDirection: "column", marginTop: "clamp(15px, 3vw, 24px)", padding: "0 clamp(10px, 3vw, 40px)", gap: "clamp(10px, 3vw, 20px)" },
-  label: { width: "clamp(80px, 20vw, 120px)", color: "red", fontWeight: "bold", textAlign: "center", marginBottom: "clamp(10px, 2vw, 20px)", fontSize: "clamp(14px, 3vw, 18px)" },
+  timelineRow: { display: "flex", alignItems: "center", flexDirection: "column", marginTop: "clamp(20px, 4vw, 30px)", padding: "0 clamp(10px, 3vw, 40px)", gap: 0 },
+  label: { width: "clamp(80px, 20vw, 120px)", color: "red", fontWeight: "bold", textAlign: "center", marginBottom: "clamp(35px, 8vw, 45px)", fontSize: "clamp(14px, 3vw, 18px)" },
   
-  // Tăng width lên 100% để tối ưu không gian hiển thị tick trên điện thoại
   timelineContent: { position: "relative", width: "100%" },
 
-  bar: { display: "flex", width: "100%", height: "clamp(30px, 6vw, 50px)", borderRadius: 10, overflow: "hidden", marginTop: 20, border: "2px solid #94a3b8" },
+  bar: { display: "flex", width: "100%", height: "clamp(30px, 6vw, 50px)", borderRadius: 10, overflow: "hidden", border: "2px solid #94a3b8" },
   part: { flex: 1 },
   line: { position: "absolute", top: 0, bottom: 0, width: 2, background: "red", zIndex: 2 },
 
   tick: { 
     position: "absolute", 
-    top: "clamp(-32px, -6vw, -24px)", 
-    transform: "translateX(-50%)", 
-    fontSize: "clamp(7px, 1.8vw, 13px)", // Auto thu nhỏ về 7px trên đt để ko đè chữ
+    bottom: "100%", 
+    transform: "translate(-50%, 4px)", 
+    fontSize: "clamp(8.5px, 2vw, 13px)", 
+    color: "#000", 
+    fontWeight: "700", 
     textAlign: "center", 
     whiteSpace: "nowrap",
     display: "flex",
     flexDirection: "column",
     alignItems: "center"
   },
-  dot: { width: "clamp(4px, 1vw, 6px)", height: "clamp(4px, 1vw, 6px)", background: "#333", borderRadius: "50%", margin: "3px auto 0" },
+  dot: { 
+    width: "clamp(4px, 1.2vw, 6px)", 
+    height: "clamp(4px, 1.2vw, 6px)", 
+    background: "#000", 
+    borderRadius: "50%", 
+    marginTop: "3px" 
+  },
 
   now: {
     position: "absolute",
-    bottom: "clamp(-22px, -4vw, -25px)",
-    transform: "translateX(-50%)",
+    top: "100%", 
+    transform: "translate(-50%, 4px)", 
     background: "red",
     color: "#fff",
     fontSize: "clamp(8px, 1.8vw, 10px)",
