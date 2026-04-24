@@ -216,61 +216,71 @@ function Timeline({
   now: Date;
 }) {
   const progress =
-    ((now.getTime() - start.getTime()) /
-      (end.getTime() - start.getTime())) *
-    100;
-  const ticks = [];
+    ((now.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100;
+  
+  const totalTicks = 16;
+  const step = (end.getTime() - start.getTime()) / totalTicks;
 
-  const total = 16;
-  const currentPart = Math.floor(progress / (100 / total));
-  const step = (end.getTime() - start.getTime()) / total;
-
-  for (let i = 0; i <= total; i++) {
-    const t = new Date(start.getTime() + step * i);
-    ticks.push({
-      percent: (i / total) * 100,
-      label: t.toLocaleDateString("vi-VN", {
-        day: "2-digit",
-        month: "2-digit",
-      }),
-      hour: t.toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    });
-  }
+  // Chia 16 phần thành 4 nhóm (mỗi nhóm 4 phần)
+  const phases = [
+    { label: "1/4 đầu", color: "#93c5fd", range: [0, 4] },
+    { label: "1/4 thứ 2", color: "#86efac", range: [4, 8] },
+    { label: "1/4 thứ 3", color: "#fef08a", range: [8, 12] },
+    { label: "1/4 cuối cùng", color: "#f9a8d4", range: [12, 16] },
+  ];
 
   return (
     <div style={styles.timelineRow}>
       <div style={styles.label}>{title}</div>
+      <div style={styles.responsiveGrid}>
+        {phases.map((phase, phaseIdx) => {
+          const [startIdx, endIdx] = phase.range;
+          const phaseStartPercent = (startIdx / totalTicks) * 100;
+          const phaseEndPercent = (endIdx / totalTicks) * 100;
+          
+          // Kiểm tra xem kim "NOW" có nằm trong đoạn này không
+          const isNowInPhase = progress >= phaseStartPercent && progress < phaseEndPercent;
+          // Tính vị trí kim NOW tương đối trong đoạn 1/4 này
+          const relativeProgress = ((progress - phaseStartPercent) / (phaseEndPercent - phaseStartPercent)) * 100;
 
-      <div style={styles.timelineContent}>
-        {ticks.map((t, i) => (
-          <div key={i} style={{ ...styles.tick, left: `${t.percent}%` }}>
-            <div>{t.label}</div>
-            <div>{t.hour}</div>
-            <div style={styles.dot}></div>
-          </div>
-        ))}
+          const ticks = [];
+          for (let i = startIdx; i <= endIdx; i++) {
+            const t = new Date(start.getTime() + step * i);
+            ticks.push({
+              percent: ((i - startIdx) / (endIdx - startIdx)) * 100,
+              label: t.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
+              hour: t.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+            });
+          }
 
-        <div style={styles.bar}>
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              style={{
-                ...styles.part,
-                background: ["#93c5fd", "#86efac", "#fef08a", "#f9a8d4"][i],
-                opacity: Math.floor(currentPart / 4) === i ? 1 : 0.4,
-                transform:
-                  Math.floor(currentPart / 4) === i ? "scaleY(1.1)" : "scaleY(1)",
-              }}
-            />
-          ))}
-
-          <div style={{ ...styles.line, left: `${progress}%` }}></div>
-        </div>
-
-        <div style={{ ...styles.now, left: `${progress}%` }}>NOW</div>
+          return (
+            <div key={phaseIdx} style={styles.phaseContainer}>
+              <div style={styles.timelineContent}>
+                {ticks.map((t, i) => (
+                  <div key={i} style={{ ...styles.tick, left: `${t.percent}%` }}>
+                    <div>{t.label}</div>
+                    <div>{t.hour}</div>
+                    <div style={styles.dot}></div>
+                  </div>
+                ))}
+                <div style={{ ...styles.bar, background: phase.color, opacity: isNowInPhase ? 1 : 0.6 }}>
+                  <div style={styles.phaseText}>{phase.label}</div>
+                  {isNowInPhase && (
+                    <>
+                      <div style={{ ...styles.line, left: `${relativeProgress}%` }}></div>
+                      <div style={{ ...styles.now, left: `${relativeProgress}%` }}>NOW</div>
+                    </>
+                  )}
+                </div>
+                {/* Hiển thị ngày giờ bắt đầu và kết thúc ở dưới bar như hình mẫu */}
+                <div style={styles.rangeTextContainer}>
+                  <span>{ticks[0].label} {ticks[0].hour}</span>
+                  <span>{ticks[ticks.length-1].label} {ticks[ticks.length-1].hour}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -278,69 +288,87 @@ function Timeline({
 
 // ===== ĐÂY LÀ PHẦN STYLE MỚI - BẠN DÁN ĐÈ VÀO CUỐI FILE =====
 const styles: any = {
-  container: { background: "#fff", minHeight: "100vh", overflowX: "hidden", paddingBottom: "40px" },
-  header: { textAlign: "center", paddingTop: 20, paddingInline: "10px" },
+  container: { background: "#fff", minHeight: "100vh", paddingBottom: "50px", fontFamily: "Arial, sans-serif" },
+  header: { textAlign: "center", paddingTop: 20 },
   title: { fontSize: "clamp(20px, 5vw, 34px)", fontWeight: "bold" },
   qkay: { color: "#2563eb" },
-  time: { color: "#2563eb", fontSize: "clamp(12px, 3vw, 16px)" },
+  time: { color: "#2563eb", fontSize: "14px" },
 
-  leftSection: { paddingLeft: "clamp(15px, 5vw, 40px)", marginTop: "clamp(15px, 4vw, 30px)" },
-  candleBox: { display: "flex", gap: "clamp(8px, 2vw, 12px)", alignItems: "center" },
+  leftSection: { paddingLeft: "20px", marginTop: "20px" },
+  candleBox: { display: "flex", gap: 10, alignItems: "center" },
   candleIcon: { position: "relative", width: 12, height: 30 },
   wick: { width: 2, height: 30, background: "#555", position: "absolute", left: "50%", transform: "translateX(-50%)" },
   body: { width: 10, height: 14, background: "#22c55e", position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)" },
+  candleTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "24px" },
+  market: { color: "#6b7280" },
+  price: { fontSize: "20px", fontWeight: "bold" },
 
-  candleTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "clamp(18px, 4vw, 30px)" },
-  market: { color: "#6b7280", fontSize: "clamp(12px, 3vw, 16px)" },
-  price: { fontSize: "clamp(16px, 4vw, 20px)", fontWeight: "bold" },
-
-  timeFrameBox: { display: "flex", gap: 10, paddingLeft: "clamp(15px, 5vw, 40px)", marginTop: "clamp(15px, 4vw, 30px)", alignItems: "center" },
+  timeFrameBox: { display: "flex", gap: 10, paddingLeft: "20px", marginTop: "20px", alignItems: "center" },
   clockIcon: { position: "relative", width: 24, height: 24 },
   clockCircle: { border: "2px solid #555", borderRadius: "50%", width: "100%", height: "100%" },
   hourHand: { width: 2, height: 7, background: "#555", position: "absolute", top: 5, left: "50%", transform: "translateX(-50%)" },
   minuteHand: { width: 2, height: 10, background: "#555", position: "absolute", top: 2, left: "50%", transform: "translateX(-50%) rotate(45deg)" },
+  timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "22px" },
 
-  timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "clamp(18px, 4vw, 24px)" },
-
-  timelineRow: { display: "flex", alignItems: "center", flexDirection: "column", marginTop: "clamp(20px, 4vw, 30px)", padding: "0 clamp(10px, 3vw, 40px)", gap: 0 },
-  label: { width: "clamp(80px, 20vw, 120px)", color: "red", fontWeight: "bold", textAlign: "center", marginBottom: "clamp(35px, 8vw, 45px)", fontSize: "clamp(14px, 3vw, 18px)" },
+  timelineRow: { marginTop: 30, padding: "0 15px" },
+  label: { color: "red", fontWeight: "bold", textAlign: "center", fontSize: "20px", marginBottom: "35px" },
   
+  // Responsive Grid: Trên PC hiện 1 dòng (4 cột), trên điện thoại tự xuống dòng
+  responsiveGrid: { 
+    display: "grid", 
+    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", 
+    gap: "50px 20px" 
+  },
+
+  phaseContainer: { marginBottom: "20px" },
   timelineContent: { position: "relative", width: "100%" },
 
-  bar: { display: "flex", width: "100%", height: "clamp(30px, 6vw, 50px)", borderRadius: 10, overflow: "hidden", border: "2px solid #94a3b8" },
-  part: { flex: 1 },
+  bar: { 
+    display: "flex", 
+    alignItems: "center", 
+    justifyContent: "center",
+    width: "100%", 
+    height: "45px", 
+    borderRadius: "10px", 
+    border: "1px solid #94a3b8",
+    position: "relative"
+  },
+  phaseText: { color: "#2563eb", fontWeight: "bold", fontSize: "16px", zIndex: 1 },
   line: { position: "absolute", top: 0, bottom: 0, width: 2, background: "red", zIndex: 2 },
 
   tick: { 
     position: "absolute", 
     bottom: "100%", 
-    transform: "translate(-50%, 4px)", 
-    fontSize: "clamp(8.5px, 2vw, 13px)", 
-    color: "#000", 
-    fontWeight: "700", 
+    transform: "translate(-50%, 5px)", 
+    fontSize: "11px", 
+    color: "#444", 
     textAlign: "center", 
     whiteSpace: "nowrap",
     display: "flex",
     flexDirection: "column",
-    alignItems: "center"
+    alignItems: "center",
+    zIndex: 3
   },
-  dot: { 
-    width: "clamp(4px, 1.2vw, 6px)", 
-    height: "clamp(4px, 1.2vw, 6px)", 
-    background: "#000", 
-    borderRadius: "50%", 
-    marginTop: "3px" 
+  dot: { width: "5px", height: "5px", background: "#333", borderRadius: "50%", marginTop: "2px" },
+
+  rangeTextContainer: { 
+    display: "flex", 
+    justifyContent: "space-between", 
+    fontSize: "11px", 
+    color: "#000", 
+    marginTop: "5px",
+    fontWeight: "500"
   },
 
   now: {
     position: "absolute",
-    top: "100%", 
-    transform: "translate(-50%, 4px)", 
+    top: "105%",
+    transform: "translateX(-50%)",
     background: "red",
     color: "#fff",
-    fontSize: "clamp(8px, 1.8vw, 10px)",
-    padding: "2px 6px",
-    borderRadius: 4,
-    zIndex: 2,
+    fontSize: "9px",
+    padding: "1px 4px",
+    borderRadius: "3px",
+    zIndex: 4,
   },
 };
