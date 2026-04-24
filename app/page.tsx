@@ -56,7 +56,7 @@ export default function Home() {
     (end.getTime() - start.getTime())) *
   100;
 
-  const createPhaseTicks = (start: number, end: number) => {
+  const createPhaseTicks = (start: Date, end: Date) => {
     const ticks = [];
     const totalParts = 16;
     const step = (end - start) / totalParts;
