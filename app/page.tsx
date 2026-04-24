@@ -149,6 +149,14 @@ export default function Home() {
         <div style={styles.introBox}>
         <div style={styles.gradientText}>Telegram: @tonnykay</div>
         <div style={styles.gradientText}>Copy sàn Binance: QKay89 BMAGVN</div>
+        <a 
+            href="https://www.binance.com/referral/earn-together/refer2earn-usdc/claim?hl=vi&ref=GRO_28502_A4JQ8&utm_source=referral_entrance" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            style={styles.gradientLink}
+  >
+            Link đăng ký Binance: Nhấp tại đây
+        </a>
       </div>
         <div style={styles.topCard}>
           {/* CỘT TRÁI: THÔNG TIN NẾN */}
@@ -341,6 +349,17 @@ const styles: any = {
     flexDirection: "column",
     gap: "5px",
     padding: "0 5px"
+  },
+  gradientLink: {
+    fontSize: "18px",
+    fontWeight: "bold",
+    background: "linear-gradient(90deg, #2563eb, #a855f7, #ec4899)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    display: "inline-block",
+    textDecoration: "none", // Để không bị gạch chân màu xanh mặc định của link
+    letterSpacing: "0.5px",
+    cursor: "pointer"
   },
   gradientText: {
     fontSize: "18px",
