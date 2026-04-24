@@ -6,6 +6,8 @@ export default function Home() {
   const [price, setPrice] = useState("");
   const [prevPrice, setPrevPrice] = useState("");
   const [now, setNow] = useState(new Date());
+  const isMobile =
+  typeof window !== "undefined" && window.innerWidth < 600;
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -190,15 +192,15 @@ export default function Home() {
         <div style={styles.timeFrameTitle}>KHUNG THỜI GIAN</div>
       </div>
 
-      <Timeline title="Năm" start={startYear} end={endYear} now={now} />
-      <Timeline title="6 Tháng" start={startHalf} end={endHalf} now={now} />
-      <Timeline title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} />
-      <Timeline title="1 Tháng" start={startMonth} end={endMonth} now={now} />
-      <Timeline title="Tuần" start={d7.start} end={d7.end} now={now} />
-      <Timeline title="5 Ngày" start={d5.start} end={d5.end} now={now} />
-      <Timeline title="3 Ngày" start={d3.start} end={d3.end} now={now} />
-      <Timeline title="2 Ngày" start={d2.start} end={d2.end} now={now} />
-      <Timeline title="1 Ngày" start={startDay} end={endDay} now={now} />
+      <Timeline title="Năm" start={startYear} end={endYear} now={now} isMobile={isMobile} />
+      <Timeline title="6 Tháng" start={startHalf} end={endHalf} now={now} isMobile={isMobile} />
+      <Timeline title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} isMobile={isMobile} />
+      <Timeline title="1 Tháng" start={startMonth} end={endMonth} now={now} isMobile={isMobile} />
+      <Timeline title="Tuần" start={d7.start} end={d7.end} now={now} isMobile={isMobile} />
+      <Timeline title="5 Ngày" start={d5.start} end={d5.end} now={now} isMobile={isMobile} />
+      <Timeline title="3 Ngày" start={d3.start} end={d3.end} now={now} isMobile={isMobile} />
+      <Timeline title="2 Ngày" start={d2.start} end={d2.end} now={now} isMobile={isMobile} />
+      <Timeline title="1 Ngày" start={startDay} end={endDay} now={now} isMobile={isMobile} />
     </div>
   );
 }
@@ -209,11 +211,13 @@ function Timeline({
   start,
   end,
   now,
+  isMobile,
 }: {
   title: string;
   start: Date;
   end: Date;
   now: Date;
+  isMobile: boolean;
 }) {
   const progress =
   ((now.getTime() - start.getTime()) /
@@ -221,7 +225,7 @@ function Timeline({
   100;
   const ticks = [];
 
-  const total = 16;
+  const total = isMobile ? 8 : 16;
   const currentPart = Math.floor(progress / (100 / total));
   const step =
   (end.getTime() - start.getTime()) / total;
@@ -234,10 +238,12 @@ function Timeline({
         day: "2-digit",
         month: "2-digit",
       }),
-      hour: t.toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      hour: isMobile
+        ? t.getHours() + "h"
+        : t.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+         }),
     });
   }
 
@@ -247,9 +253,9 @@ function Timeline({
 
       <div style={styles.timelineContent}>
         {ticks.map((t, i) => (
-          <div key={i} style={{ ...styles.tick, left: `${t.percent}%` }}>
+          <div key={i} style={{ ...styles.tick, left: `${t.percent}%`, transform: i === ticks.length - 1 ? "translateX(-100%)" : "translateX(-50%)" }}>
             <div>{t.label}</div>
-            <div>{t.hour}</div>
+            {!isMobile && <div>{t.hour}</div>}
             <div style={styles.dot}></div>
           </div>
         ))}
@@ -291,7 +297,7 @@ const styles: any = {
   wick: { width: 2, height: 30, background: "#555", position: "absolute", left: "50%", transform: "translateX(-50%)" },
   body: { width: 10, height: 14, background: "#22c55e", position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)" },
 
-  candleTitle: { color: "#a855f7", fontWeight: "bold", fontSize: 20 },
+  candleTitle: { color: "#a855f7", fontWeight: "bold", fontSize: 30 },
   market: { color: "#6b7280" },
   price: { fontSize: 20, fontWeight: "bold" },
 
@@ -301,17 +307,17 @@ const styles: any = {
   hourHand: { width: 2, height: 7, background: "#555", position: "absolute", top: 5, left: "50%", transform: "translateX(-50%)" },
   minuteHand: { width: 2, height: 10, background: "#555", position: "absolute", top: 2, left: "50%", transform: "translateX(-50%) rotate(45deg)" },
 
-  timeFrameTitle: { color: "#a855f7", fontWeight: "bold" },
+  timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: 24 },
 
-  timelineRow: { display: "flex", alignItems: "center", marginTop: 60, padding: "0 40px", gap: 20 },
-  label: { width: 120, color: "red", fontWeight: "bold" },
-  timelineContent: { position: "relative", width: "80%" },
+  timelineRow: { display: "flex", alignItems: "center", flexDirection: "column", marginTop: 24, padding: "0 40px", gap: 20 },
+  label: { width: "clamp(70px,15vw,120px)", color: "red", fontWeight: "bold", textAlign: "center", marginBottom: 20, fontSize: "clamp(12px,2.5vw,16px)", },
+  timelineContent: { position: "relative", width: "90%" },
 
-  bar: { display: "flex", width: "100%", height: 50, borderRadius: 10, overflow: "hidden", marginTop: 20, border: "2px solid #94a3b8" },
+  bar: { display: "flex", width: "100%", height: "clamp(30px,6vw,50px)", borderRadius: 10, overflow: "hidden", marginTop: 20, border: "2px solid #94a3b8" },
   part: { flex: 1 },
   line: { position: "absolute", top: 0, bottom: 0, width: 2, background: "red" },
 
-  tick: { position: "absolute", top: -30, transform: "translateX(-50%)", fontSize: 10, textAlign: "center" },
+  tick: { position: "absolute", top: -24, transform: "translateX(-50%)", fontSize: "clamp(8px,2vw,10px)", textAlign: "center", whiteSpace: "nowrap", },
   dot: { width: 6, height: 6, background: "#333", borderRadius: "50%", margin: "3px auto" },
 
   now: {
