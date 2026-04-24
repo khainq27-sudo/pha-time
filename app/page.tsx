@@ -51,8 +51,10 @@ export default function Home() {
     return () => ws.close();
   }, []);
 
-  const getProgress = (start: number, end: number) =>
-  ((now - start) / (end - start)) * 100;
+  const getProgress = (start: Date, end: Date) =>
+  ((now.getTime() - start.getTime()) /
+    (end.getTime() - start.getTime())) *
+  100;
 
   const createPhaseTicks = (start: number, end: number) => {
     const ticks = [];
@@ -201,8 +203,21 @@ export default function Home() {
 }
 
 // ===== COMPONENT =====
-function Timeline({ title, start, end, now }) {
-  const progress = ((now - start) / (end - start)) * 100;
+function Timeline({
+  title,
+  start,
+  end,
+  now,
+}: {
+  title: string;
+  start: Date;
+  end: Date;
+  now: Date;
+}) {
+  const progress =
+  ((now.getTime() - start.getTime()) /
+    (end.getTime() - start.getTime())) *
+  100;
   const ticks = [];
 
   const total = 16;
