@@ -6,6 +6,8 @@ export default function Home() {
   const [price, setPrice] = useState("");
   const [prevPrice, setPrevPrice] = useState("");
   const [now, setNow] = useState(new Date());
+  const [history, setHistory] = useState<number[]>([]);
+  const [openPrice, setOpenPrice] = useState<number | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -41,12 +43,24 @@ export default function Home() {
     };
 
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.data) {
-        setPrevPrice(price);
-        setPrice(data.data[0].last);
-      }
-    };
+  const data = JSON.parse(event.data);
+
+  if (data.data) {
+    const last = parseFloat(data.data[0].last);
+
+    setPrevPrice(price);
+    setPrice(last.toString());
+
+    // lưu lịch sử giá
+    setHistory((prev) => {
+      const updated = [...prev, last];
+      return updated.slice(-50);
+    });
+
+    // set giá mở cửa (chỉ 1 lần)
+    setOpenPrice((prev) => prev ?? last);
+  }
+};
 
     return () => ws.close();
   }, []);
@@ -221,7 +235,7 @@ function Timeline({
   100;
   const ticks = [];
 
-  const total = 16;
+  const total = window.innerWidth < 768 ? 6 : 16;
   const currentPart = Math.floor(progress / (100 / total));
   const step =
   (end.getTime() - start.getTime()) / total;
@@ -303,7 +317,14 @@ const styles: any = {
 
   timeFrameTitle: { color: "#a855f7", fontWeight: "bold" },
 
-  timelineRow: { display: "flex", alignItems: "center", marginTop: 60, padding: "0 40px", gap: 20 },
+  timelineRow: {
+  display: "flex",
+  flexDirection: window.innerWidth < 768 ? "column" : "row", // 🔥
+  alignItems: "flex-start",
+  marginTop: 40,
+  padding: window.innerWidth < 768 ? "0 10px" : "0 40px",
+  gap: 20
+},
   label: { width: 120, color: "red", fontWeight: "bold" },
   timelineContent: { position: "relative", width: "80%" },
 
@@ -311,7 +332,14 @@ const styles: any = {
   part: { flex: 1 },
   line: { position: "absolute", top: 0, bottom: 0, width: 2, background: "red" },
 
-  tick: { position: "absolute", top: -30, transform: "translateX(-50%)", fontSize: 10, textAlign: "center" },
+  tick: {
+  position: "absolute",
+  top: -30,
+  transform: "translateX(-50%)",
+  fontSize: window.innerWidth < 768 ? 8 : 10,
+  textAlign: "center",
+  whiteSpace: "nowrap", // 🔥 QUAN TRỌNG
+},
   dot: { width: 6, height: 6, background: "#333", borderRadius: "50%", margin: "3px auto" },
 
   now: {
@@ -325,5 +353,4 @@ const styles: any = {
     borderRadius: 4,
   },
 };
-
 
