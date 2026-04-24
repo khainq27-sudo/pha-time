@@ -134,14 +134,22 @@ export default function Home() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>
-          <span style={styles.qkay}>QKAY</span> - BMAGVN - PHA THỜI GIAN
-        </h1>
+        {/* PHẦN TITLE KÈM AVATAR */}
+        <div style={styles.titleWrapper}>
+          <img src="/11.jpg" alt="QKAY Avatar" style={styles.avatar} />
+          <h1 style={styles.title}>
+            <span style={styles.qkay}>QKAY</span> - BMAGVN - PHA THỜI GIAN
+          </h1>
+        </div>
         <p style={styles.time}>Thời gian hiện tại: {time}</p>
       </div>
 
       {/* BỌC PHẦN THÔNG TIN NẾN VÀ SÓNG VÀO MỘT CARD GIỐNG HÌNH */}
       <div style={styles.topCardWrapper}>
+        <div style={styles.introBox}>
+        <div style={styles.gradientText}>Telegram: @tonnykay</div>
+        <div style={styles.gradientText}>Copy sàn Binance: QKay89 BMAGVN</div>
+      </div>
         <div style={styles.topCard}>
           {/* CỘT TRÁI: THÔNG TIN NẾN */}
           <div style={styles.candleInfoSide}>
@@ -252,7 +260,6 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   );
 }
 
-
 // ===== COMPONENT TIMELINE GỐC =====
 function Timeline({ title, start, end, now }: { title: string; start: Date; end: Date; now: Date; }) {
   const progress =
@@ -328,11 +335,60 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
 
 // ===== PHẦN STYLE ĐÃ CẬP NHẬT =====
 const styles: any = {
-  container: { background: "#fafafa", minHeight: "100vh", paddingBottom: "50px", fontFamily: "Arial, sans-serif" },
-  header: { textAlign: "center", paddingTop: 20 },
-  title: { fontSize: "clamp(20px, 5vw, 34px)", fontWeight: "bold" },
+  introBox: {
+    marginBottom: "15px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "5px",
+    padding: "0 5px"
+  },
+  gradientText: {
+    fontSize: "18px",
+    fontWeight: "bold",
+    background: "linear-gradient(90deg, #2563eb, #a855f7, #ec4899)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    display: "inline-block",
+    textTransform: "none",
+    letterSpacing: "0.5px"
+  },
+  container: { 
+    background: "#fafafa", 
+    minHeight: "100vh", 
+    paddingBottom: "50px", 
+    fontFamily: "Arial, sans-serif",
+    WebkitFontSmoothing: "antialiased" // Khử răng cưa giúp chữ sắc nét hơn trên mobile
+  },
+  header: { 
+    textAlign: "center", 
+    paddingTop: 20,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center"
+  },
+  titleWrapper: { 
+    display: "flex", 
+    alignItems: "center", 
+    justifyContent: "center", 
+    gap: "15px", 
+    flexWrap: "wrap",
+    marginBottom: "8px"
+  },
+  avatar: { 
+    width: "65px", 
+    height: "65px", 
+    borderRadius: "50%", 
+    objectFit: "cover", 
+    border: "3px solid #cbd5e1" // Viền giống với ảnh mẫu
+  },
+  title: { 
+    fontSize: "clamp(22px, 5vw, 36px)", 
+    fontWeight: "900", // Tăng độ đậm để tránh bị mờ
+    margin: 0,
+    color: "#111"
+  },
   qkay: { color: "#2563eb" },
-  time: { color: "#2563eb", fontSize: "14px" },
+  time: { color: "#2563eb", fontSize: "14px", marginTop: "5px" },
 
   // Bố cục khung thông tin nến và sóng mới
   topCardWrapper: { padding: "0 10%", marginTop: "20px" },
@@ -371,7 +427,7 @@ const styles: any = {
   timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "22px" },
 
   timelineRow: { marginTop: 30, padding: "0 10%" },
-  label: { color: "red", fontWeight: "bold", textAlign: "left", fontSize: "20px", marginBottom: "20px" },
+  label: { color: "red", fontWeight: "bold",  textAlign: "center", fontSize: "20px", marginBottom: "33px" },
   
   responsiveGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "30px 10px" },
   phaseContainer: { marginBottom: "20px" },
@@ -381,9 +437,31 @@ const styles: any = {
   phaseText: { color: "#2563eb", fontWeight: "bold", fontSize: "14px", zIndex: 1 },
   line: { position: "absolute", top: 0, bottom: 0, width: 2, background: "red", zIndex: 2 },
 
-  tick: { position: "absolute", bottom: "100%", transform: "translate(-50%, -2px)", fontSize: "10px", color: "#666", textAlign: "center", whiteSpace: "nowrap", display: "flex", flexDirection: "column", alignItems: "center", zIndex: 3 },
-  dot: { width: "4px", height: "4px", background: "#999", borderRadius: "50%", marginTop: "4px" },
+  // Chỉnh sửa lại phần này để chống mờ trên điện thoại
+  tick: { 
+    position: "absolute", 
+    bottom: "100%", 
+    transform: "translate(-50%, -2px)", 
+    fontSize: "11.5px", // Đã tăng từ 10px lên
+    fontWeight: "600",  // Làm đậm thêm một chút
+    color: "#444",      // Đổi sang xám đậm hơn thay vì #666
+    textAlign: "center", 
+    whiteSpace: "nowrap", 
+    display: "flex", 
+    flexDirection: "column", 
+    alignItems: "center", 
+    zIndex: 3 
+  },
+  dot: { width: "4px", height: "4px", background: "#777", borderRadius: "50%", marginTop: "4px" },
 
-  rangeTextContainer: { display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#666", marginTop: "6px", fontWeight: "500" },
+  // Cập nhật text thời gian start/end mốc dưới
+  rangeTextContainer: { 
+    display: "flex", 
+    justifyContent: "space-between", 
+    fontSize: "11.5px", // Tăng từ 10px
+    color: "#444", 
+    marginTop: "6px", 
+    fontWeight: "600" 
+  },
   now: { position: "absolute", top: "110%", transform: "translateX(-50%)", background: "red", color: "#fff", fontSize: "9px", padding: "2px 5px", borderRadius: "4px", zIndex: 4 },
 };
