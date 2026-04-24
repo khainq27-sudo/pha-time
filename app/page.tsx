@@ -51,10 +51,10 @@ export default function Home() {
     return () => ws.close();
   }, []);
 
-  const getProgress = (start, end) =>
-    ((now - start) / (end - start)) * 100;
+  const getProgress = (start: number, end: number) =>
+  ((now - start) / (end - start)) * 100;
 
-  const createPhaseTicks = (start, end) => {
+  const createPhaseTicks = (start: number, end: number) => {
     const ticks = [];
     const totalParts = 16;
     const step = (end - start) / totalParts;
