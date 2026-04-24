@@ -59,7 +59,8 @@ export default function Home() {
   const createPhaseTicks = (start: Date, end: Date) => {
     const ticks = [];
     const totalParts = 16;
-    const step = (end - start) / totalParts;
+    const step =
+  (end.getTime() - start.getTime()) / totalParts;
 
     for (let i = 0; i <= totalParts; i++) {
       const t = new Date(start.getTime() + step * i);
@@ -222,7 +223,8 @@ function Timeline({
 
   const total = 16;
   const currentPart = Math.floor(progress / (100 / total));
-  const step = (end - start) / total;
+  const step =
+  (end.getTime() - start.getTime()) / total;
 
   for (let i = 0; i <= total; i++) {
     const t = new Date(start.getTime() + step * i);
