@@ -6,11 +6,12 @@ export default function Home() {
   const [price, setPrice] = useState("");
   const [prevPrice, setPrevPrice] = useState("");
   const [openPrice, setOpenPrice] = useState(""); // Giá mở cửa 7h sáng
-  const [now, setNow] = useState(new Date());
+  const [now, setNow] = useState<Date | null>(null); // Tránh lỗi Hydration
   const [chartData, setChartData] = useState<number[]>([]); // Dữ liệu sóng
 
-  // Cập nhật đồng hồ
+  // 1. Cập nhật đồng hồ
   useEffect(() => {
+    setNow(new Date());
     const interval = setInterval(() => {
       const current = new Date();
       const formatted = current.toLocaleString("vi-VN", {
@@ -28,12 +29,13 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m)
+  // 2. Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m)
   useEffect(() => {
     const fetchChartData = async () => {
       try {
         const res = await fetch(
-          "https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=5m&limit=300"
+          "https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=5m&limit=300",
+          { cache: "no-store" } // Bỏ cache để Vercel luôn lấy dữ liệu mới nhất
         );
         const json = await res.json();
         if (json.data) {
@@ -61,33 +63,57 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // WebSocket lấy giá realtime và giá mở cửa
+  // 3. WebSocket lấy giá realtime và giá mở cửa (Đã tối ưu)
   useEffect(() => {
-    const ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
+    let ws: WebSocket;
+    let reconnectTimeout: NodeJS.Timeout;
 
-    ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          op: "subscribe",
-          args: [{ channel: "tickers", instId: "BTC-USDT" }],
-        })
-      );
-    };
+    const connectWebSocket = () => {
+      ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.data) {
-        setPrevPrice(price);
-        setPrice(data.data[0].last);
-        // sodUtc0 là giá mở cửa lúc 00:00 UTC (Đúng 7h00 sáng VN)
-        if (data.data[0].sodUtc0) {
-          setOpenPrice(data.data[0].sodUtc0);
+      ws.onopen = () => {
+        ws.send(
+          JSON.stringify({
+            op: "subscribe",
+            args: [{ channel: "tickers", instId: "BTC-USDT" }],
+          })
+        );
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.data && data.data.length > 0) {
+          const ticker = data.data[0];
+          
+          setPrice((currentPrice) => {
+            if (currentPrice && currentPrice !== ticker.last) {
+              setPrevPrice(currentPrice);
+            }
+            return ticker.last;
+          });
+
+          // sodUtc0 là giá mở cửa lúc 00:00 UTC (Đúng 7h00 sáng VN)
+          if (ticker.sodUtc0) {
+            setOpenPrice(ticker.sodUtc0);
+          }
         }
-      }
+      };
+
+      ws.onclose = () => {
+        reconnectTimeout = setTimeout(connectWebSocket, 3000);
+      };
     };
 
-    return () => ws.close();
-  }, [price]);
+    connectWebSocket();
+
+    return () => {
+      clearTimeout(reconnectTimeout);
+      if (ws) ws.close();
+    };
+  }, []); // Dependency rỗng để chỉ kết nối 1 lần duy nhất
+
+  // Đợi Client mount xong mới hiển thị giao diện để tránh lỗi đồng bộ Next.js
+  if (!now) return null;
 
   // ===== TÍNH TOÁN % TĂNG GIẢM =====
   const p = parseFloat(price);
@@ -131,6 +157,7 @@ export default function Home() {
   const d3 = { start: new Date(now.getFullYear(), 3, 22, 7), end: new Date(now.getFullYear(), 3, 22, 7 + 24 * 3) };
   const d2 = { start: new Date(now.getFullYear(), 3, 23, 7), end: new Date(now.getFullYear(), 3, 23, 7 + 24 * 2) };
 
+  // ===== TOÀN BỘ GIAO DIỆN GỐC CỦA BẠN =====
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -357,7 +384,7 @@ const styles: any = {
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
     display: "inline-block",
-    textDecoration: "none", // Để không bị gạch chân màu xanh mặc định của link
+    textDecoration: "none", 
     letterSpacing: "0.5px",
     cursor: "pointer"
   },
@@ -376,7 +403,7 @@ const styles: any = {
     minHeight: "100vh", 
     paddingBottom: "50px", 
     fontFamily: "Arial, sans-serif",
-    WebkitFontSmoothing: "antialiased" // Khử răng cưa giúp chữ sắc nét hơn trên mobile
+    WebkitFontSmoothing: "antialiased" 
   },
   header: { 
     textAlign: "center", 
@@ -398,18 +425,17 @@ const styles: any = {
     height: "65px", 
     borderRadius: "50%", 
     objectFit: "cover", 
-    border: "3px solid #cbd5e1" // Viền giống với ảnh mẫu
+    border: "3px solid #cbd5e1" 
   },
   title: { 
     fontSize: "clamp(22px, 5vw, 36px)", 
-    fontWeight: "900", // Tăng độ đậm để tránh bị mờ
+    fontWeight: "900", 
     margin: 0,
     color: "#111"
   },
   qkay: { color: "#2563eb" },
   time: { color: "#2563eb", fontSize: "14px", marginTop: "5px" },
 
-  // Bố cục khung thông tin nến và sóng mới
   topCardWrapper: { padding: "0 10%", marginTop: "20px" },
   topCard: { 
     display: "flex", 
@@ -456,14 +482,13 @@ const styles: any = {
   phaseText: { color: "#2563eb", fontWeight: "bold", fontSize: "14px", zIndex: 1 },
   line: { position: "absolute", top: 0, bottom: 0, width: 2, background: "red", zIndex: 2 },
 
-  // Chỉnh sửa lại phần này để chống mờ trên điện thoại
   tick: { 
     position: "absolute", 
     bottom: "100%", 
     transform: "translate(-50%, -2px)", 
-    fontSize: "11.5px", // Đã tăng từ 10px lên
-    fontWeight: "600",  // Làm đậm thêm một chút
-    color: "#444",      // Đổi sang xám đậm hơn thay vì #666
+    fontSize: "11.5px", 
+    fontWeight: "600",  
+    color: "#444",      
     textAlign: "center", 
     whiteSpace: "nowrap", 
     display: "flex", 
@@ -473,11 +498,10 @@ const styles: any = {
   },
   dot: { width: "4px", height: "4px", background: "#777", borderRadius: "50%", marginTop: "4px" },
 
-  // Cập nhật text thời gian start/end mốc dưới
   rangeTextContainer: { 
     display: "flex", 
     justifyContent: "space-between", 
-    fontSize: "11.5px", // Tăng từ 10px
+    fontSize: "11.5px", 
     color: "#444", 
     marginTop: "6px", 
     fontWeight: "600" 
