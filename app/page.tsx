@@ -35,7 +35,7 @@ export default function Home() {
       try {
         const res = await fetch(
           "https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=5m&limit=300",
-          { cache: "no-store" } // Bỏ cache để Vercel luôn lấy dữ liệu mới nhất
+          { cache: "no-store" }
         );
         const json = await res.json();
         if (json.data) {
@@ -45,11 +45,10 @@ export default function Home() {
           if (currentTime < startDay) startDay.setDate(startDay.getDate() - 1);
           const targetTs = startDay.getTime();
 
-          // Lọc nến từ 7h sáng đến hiện tại
           const validData = json.data
             .filter((candle: any[]) => parseInt(candle[0]) >= targetTs)
-            .map((candle: any[]) => parseFloat(candle[4])) // Lấy giá close
-            .reverse(); // OKX trả về mới nhất trước, cần đảo ngược lại
+            .map((candle: any[]) => parseFloat(candle[4]))
+            .reverse();
 
           setChartData(validData);
         }
@@ -59,11 +58,11 @@ export default function Home() {
     };
 
     fetchChartData();
-    const interval = setInterval(fetchChartData, 60000); // Cập nhật sóng mỗi 1 phút
+    const interval = setInterval(fetchChartData, 60000);
     return () => clearInterval(interval);
   }, []);
 
-  // 3. WebSocket lấy giá realtime và giá mở cửa (Đã tối ưu)
+  // 3. WebSocket lấy giá realtime và giá mở cửa
   useEffect(() => {
     let ws: WebSocket;
     let reconnectTimeout: NodeJS.Timeout;
@@ -92,7 +91,6 @@ export default function Home() {
             return ticker.last;
           });
 
-          // sodUtc0 là giá mở cửa lúc 00:00 UTC (Đúng 7h00 sáng VN)
           if (ticker.sodUtc0) {
             setOpenPrice(ticker.sodUtc0);
           }
@@ -110,9 +108,8 @@ export default function Home() {
       clearTimeout(reconnectTimeout);
       if (ws) ws.close();
     };
-  }, []); // Dependency rỗng để chỉ kết nối 1 lần duy nhất
+  }, []);
 
-  // Đợi Client mount xong mới hiển thị giao diện để tránh lỗi đồng bộ Next.js
   if (!now) return null;
 
   // ===== TÍNH TOÁN % TĂNG GIẢM =====
@@ -129,39 +126,74 @@ export default function Home() {
     diffStr = `${sign}${pct}% (${sign}${diff.toFixed(1)} USDT)`;
   }
 
-  // ===== CÁC BIẾN THỜI GIAN CŨ =====
-  const startYear = new Date(now.getFullYear(), 0, 1, 7);
-  const endYear = new Date(now.getFullYear() + 1, 0, 1, 7);
+  // ===== HÀM HỖ TRỢ LẤY ĐÚNG 7H SÁNG =====
+  const get7AM = (y: number, m: number, d: number) => new Date(y, m, d, 7, 0, 0);
 
-  const isFirstHalf = now.getMonth() < 6;
-  const startHalf = isFirstHalf
-    ? new Date(now.getFullYear(), 0, 1, 7)
-    : new Date(now.getFullYear(), 6, 1, 7);
-  const endHalf = isFirstHalf
-    ? new Date(now.getFullYear(), 6, 1, 7)
-    : new Date(now.getFullYear() + 1, 0, 1, 7);
+  // ===== TÍNH TOÁN CÁC BIẾN THỜI GIAN =====
+  const y = now.getFullYear();
 
-  const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1, 7);
-  const quarterEnd = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 + 3, 1, 7);
+  // NĂM
+  let startYear = get7AM(y, 0, 1);
+  if (now < startYear) startYear = get7AM(y - 1, 0, 1);
+  const endYear = get7AM(startYear.getFullYear() + 1, 0, 1);
 
-  const startMonth = new Date(now.getFullYear(), now.getMonth(), 1, 7);
-  const endMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1, 7);
-  
-  const startDay = new Date(now);
-  startDay.setHours(7, 0, 0, 0);
-  if (now < startDay) startDay.setDate(startDay.getDate() - 1);
+  // 6 THÁNG
+  let hMonth = now.getMonth() >= 6 ? 6 : 0;
+  let startHalf = get7AM(startYear.getFullYear(), hMonth, 1);
+  if (now < startHalf) {
+    hMonth = hMonth === 0 ? 6 : 0;
+    const yHalf = hMonth === 6 ? startYear.getFullYear() - 1 : startYear.getFullYear();
+    startHalf = get7AM(yHalf, hMonth, 1);
+  }
+  const endHalf = get7AM(startHalf.getFullYear(), startHalf.getMonth() + 6, 1);
+
+  // 3 THÁNG (QUÝ)
+  let qMonth = Math.floor(now.getMonth() / 3) * 3;
+  let quarterStart = get7AM(now.getFullYear(), qMonth, 1);
+  if (now < quarterStart) {
+    quarterStart = get7AM(quarterStart.getFullYear(), quarterStart.getMonth() - 3, 1);
+  }
+  const quarterEnd = get7AM(quarterStart.getFullYear(), quarterStart.getMonth() + 3, 1);
+
+  // 1 THÁNG
+  let startMonth = get7AM(now.getFullYear(), now.getMonth(), 1);
+  if (now < startMonth) {
+    startMonth = get7AM(startMonth.getFullYear(), startMonth.getMonth() - 1, 1);
+  }
+  const endMonth = get7AM(startMonth.getFullYear(), startMonth.getMonth() + 1, 1);
+
+  // 1 NGÀY
+  let startDay = get7AM(now.getFullYear(), now.getMonth(), now.getDate());
+  if (now < startDay) {
+    startDay = new Date(startDay.getTime() - 86400000);
+  }
   const endDay = new Date(startDay.getTime() + 86400000);
 
-  const d7 = { start: new Date(now.getFullYear(), 3, 20, 7), end: new Date(now.getFullYear(), 3, 20, 7 + 24 * 7) };
-  const d5 = { start: new Date(now.getFullYear(), 3, 22, 7), end: new Date(now.getFullYear(), 3, 22, 7 + 24 * 5) };
-  const d3 = { start: new Date(now.getFullYear(), 3, 22, 7), end: new Date(now.getFullYear(), 3, 22, 7 + 24 * 3) };
-  const d2 = { start: new Date(now.getFullYear(), 3, 23, 7), end: new Date(now.getFullYear(), 3, 23, 7 + 24 * 2) };
+  // CHU KỲ CUỐN CHIẾU ĐA NGÀY THEO MỐC CHUẨN CỦA OKX
+  const getRollingPeriodWithAnchor = (anchorY: number, anchorM: number, anchorD: number, days: number) => {
+    // Lưu ý: anchorM (tháng) trong Date object của JS bắt đầu từ 0 (Ví dụ: Tháng 4 = 3)
+    const anchor = new Date(anchorY, anchorM, anchorD, 7, 0, 0).getTime();
+    const periodMs = days * 86400000;
+    
+    // Tính toán số chu kỳ đã trôi qua so với mốc (có thể âm nếu hiện tại nhỏ hơn mốc)
+    const cycles = Math.floor((now.getTime() - anchor) / periodMs);
+    const start = new Date(anchor + cycles * periodMs);
+    const end = new Date(start.getTime() + periodMs);
+    
+    return { start, end };
+  };
 
-  // ===== TOÀN BỘ GIAO DIỆN GỐC CỦA BẠN =====
+  // Áp dụng đúng các mốc bạn vừa cung cấp (Tháng 4 -> index là 3)
+  const d2 = getRollingPeriodWithAnchor(2026, 3, 25, 2); // 2D: Mốc 25/04/2026
+  const d3 = getRollingPeriodWithAnchor(2026, 3, 25, 3); // 3D: Mốc 25/04/2026
+  const d5 = getRollingPeriodWithAnchor(2026, 3, 22, 5); // 5D: Mốc 22/04/2026
+  
+  // Tuần thường bắt đầu từ thứ 2, dùng mốc thứ Hai gần nhất trước đó (20/04/2026)
+  const d7 = getRollingPeriodWithAnchor(2026, 3, 20, 7); 
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        {/* PHẦN TITLE KÈM AVATAR */}
         <div style={styles.titleWrapper}>
           <img src="/11.jpg" alt="QKAY Avatar" style={styles.avatar} />
           <h1 style={styles.title}>
@@ -171,22 +203,21 @@ export default function Home() {
         <p style={styles.time}>Thời gian hiện tại: {time}</p>
       </div>
 
-      {/* BỌC PHẦN THÔNG TIN NẾN VÀ SÓNG VÀO MỘT CARD GIỐNG HÌNH */}
       <div style={styles.topCardWrapper}>
         <div style={styles.introBox}>
-        <div style={styles.gradientText}>Telegram: @tonnykay</div>
-        <div style={styles.gradientText}>Copy sàn Binance: QKay89 BMAGVN</div>
-        <a 
+          {/* ĐÃ TRẢ LẠI STYLE CHỮ ĐƠN GIẢN, KHÔNG DÙNG GRADIENT ĐỂ TRÁNH LỖI */}
+          <div style={styles.simpleText}>Telegram: @tonnykay</div>
+          <div style={styles.simpleText}>Copy sàn Binance: QKay89 BMAGVN</div>
+          <a 
             href="https://www.binance.com/referral/earn-together/refer2earn-usdc/claim?hl=vi&ref=GRO_28502_A4JQ8&utm_source=referral_entrance" 
             target="_blank" 
             rel="noopener noreferrer" 
-            style={styles.gradientLink}
-  >
+            style={styles.simpleLink}
+          >
             Link đăng ký Binance: Nhấp tại đây
-        </a>
-      </div>
+          </a>
+        </div>
         <div style={styles.topCard}>
-          {/* CỘT TRÁI: THÔNG TIN NẾN */}
           <div style={styles.candleInfoSide}>
             <div style={styles.candleBox}>
               <div style={styles.candleIcon}>
@@ -218,7 +249,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* CỘT PHẢI: BIỂU ĐỒ SÓNG */}
           <div style={styles.chartSide}>
             <WaveChart data={chartData} openPrice={parseFloat(openPrice)} currentPrice={parseFloat(price)} />
           </div>
@@ -251,23 +281,20 @@ export default function Home() {
 function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPrice: number; currentPrice: number }) {
   if (!data || data.length === 0 || isNaN(openPrice)) return null;
 
-  // Lấy data point mới nhất để cập nhật live từ WebSocket nếu có
   const chartData = [...data];
   if (!isNaN(currentPrice)) chartData[chartData.length - 1] = currentPrice;
 
   const minData = Math.min(...chartData, openPrice);
   const maxData = Math.max(...chartData, openPrice);
   
-  // Tạo biên độ padding cho y để sóng không chạm viền
   const range = maxData - minData || 1;
   const padding = range * 0.2; 
   const min = minData - padding;
   const max = maxData + padding;
 
   const isGreen = currentPrice >= openPrice;
-  const color = isGreen ? "#22c55e" : "#ef4444"; // Xanh lá nếu >= mở cửa, ngược lại đỏ
+  const color = isGreen ? "#22c55e" : "#ef4444"; 
 
-  // Dựng hàm map điểm data thành tọa độ SVG
   const width = 800; 
   const height = 150;
   
@@ -280,14 +307,9 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   return (
     <div style={{ width: "100%", height: "100px", position: "relative" }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-        {/* Đường đứt nét giá mở cửa */}
         <line x1={0} y1={openY} x2={width} y2={openY} stroke="#9ca3af" strokeDasharray="5,5" strokeWidth="2" />
-        
-        {/* Đường sóng */}
         <path d={pathD} fill="none" stroke={color} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
       </svg>
-      
-      {/* Label Giá mở cửa */}
       <div style={{ position: "absolute", right: 0, top: "100%", marginTop: "5px", fontSize: "13px", color: "#6b7280" }}>
         Giá mở cửa: {openPrice.toLocaleString()}
       </div>
@@ -295,10 +317,10 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   );
 }
 
-// ===== COMPONENT TIMELINE GỐC =====
+// ===== COMPONENT TIMELINE =====
 function Timeline({ title, start, end, now }: { title: string; start: Date; end: Date; now: Date; }) {
-  const progress =
-    ((now.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100;
+  let progress = ((now.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100;
+  progress = Math.max(0, Math.min(100, progress)); 
   
   const totalTicks = 16;
   const step = (end.getTime() - start.getTime()) / totalTicks;
@@ -319,8 +341,10 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
           const phaseStartPercent = (startIdx / totalTicks) * 100;
           const phaseEndPercent = (endIdx / totalTicks) * 100;
           
-          const isNowInPhase = progress >= phaseStartPercent && progress < phaseEndPercent;
-          const relativeProgress = ((progress - phaseStartPercent) / (phaseEndPercent - phaseStartPercent)) * 100;
+          const isNowInPhase = progress >= phaseStartPercent && (progress < phaseEndPercent || (phaseIdx === 3 && progress === 100));
+          
+          let relativeProgress = ((progress - phaseStartPercent) / (phaseEndPercent - phaseStartPercent)) * 100;
+          relativeProgress = Math.max(0, Math.min(100, relativeProgress));
 
           const ticks = [];
           for (let i = startIdx; i <= endIdx; i++) {
@@ -346,6 +370,7 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
                     <div style={styles.dot}></div>
                   </div>
                 ))}
+                
                 <div style={{ ...styles.bar, background: phase.color, opacity: isNowInPhase ? 1 : 0.6 }}>
                   <div style={styles.phaseText}>{phase.label}</div>
                   {isNowInPhase && (
@@ -355,6 +380,7 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
                     </>
                   )}
                 </div>
+                
                 <div style={styles.rangeTextContainer}>
                   <span>{ticks[0].label} {ticks[0].hour}</span>
                   <span>{ticks[ticks.length-1].label} {ticks[ticks.length-1].hour}</span>
@@ -368,35 +394,26 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
   );
 }
 
-// ===== PHẦN STYLE ĐÃ CẬP NHẬT =====
+// ===== PHẦN STYLE =====
 const styles: any = {
   introBox: {
     marginBottom: "15px",
     display: "flex",
     flexDirection: "column",
-    gap: "5px",
+    gap: "8px",
     padding: "0 5px"
   },
-  gradientLink: {
-    fontSize: "18px",
+  simpleText: {
+    fontSize: "16px",
     fontWeight: "bold",
-    background: "linear-gradient(90deg, #2563eb, #a855f7, #ec4899)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    display: "inline-block",
-    textDecoration: "none", 
-    letterSpacing: "0.5px",
-    cursor: "pointer"
+    color: "#2563eb", 
   },
-  gradientText: {
-    fontSize: "18px",
+  simpleLink: {
+    fontSize: "16px",
     fontWeight: "bold",
-    background: "linear-gradient(90deg, #2563eb, #a855f7, #ec4899)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    display: "inline-block",
-    textTransform: "none",
-    letterSpacing: "0.5px"
+    color: "#2563eb",
+    textDecoration: "none", 
+    cursor: "pointer"
   },
   container: { 
     background: "#fafafa", 
@@ -480,7 +497,8 @@ const styles: any = {
 
   bar: { display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "35px", borderRadius: "8px", border: "1px solid #94a3b8", position: "relative" },
   phaseText: { color: "#2563eb", fontWeight: "bold", fontSize: "14px", zIndex: 1 },
-  line: { position: "absolute", top: 0, bottom: 0, width: 2, background: "red", zIndex: 2 },
+  
+  line: { position: "absolute", top: -5, bottom: -5, width: 3, background: "#ef4444", zIndex: 5, borderRadius: "2px" },
 
   tick: { 
     position: "absolute", 
@@ -506,5 +524,18 @@ const styles: any = {
     marginTop: "6px", 
     fontWeight: "600" 
   },
-  now: { position: "absolute", top: "110%", transform: "translateX(-50%)", background: "red", color: "#fff", fontSize: "9px", padding: "2px 5px", borderRadius: "4px", zIndex: 4 },
+  
+  now: { 
+    position: "absolute", 
+    top: "100%", 
+    transform: "translate(-50%, 6px)", 
+    background: "#ef4444", 
+    color: "#fff", 
+    fontSize: "10px", 
+    padding: "3px 6px", 
+    borderRadius: "4px", 
+    zIndex: 6,
+    fontWeight: "bold",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+  },
 };
