@@ -171,11 +171,9 @@ export default function Home() {
 
   // CHU KỲ CUỐN CHIẾU ĐA NGÀY THEO MỐC CHUẨN CỦA OKX
   const getRollingPeriodWithAnchor = (anchorY: number, anchorM: number, anchorD: number, days: number) => {
-    // Lưu ý: anchorM (tháng) trong Date object của JS bắt đầu từ 0 (Ví dụ: Tháng 4 = 3)
     const anchor = new Date(anchorY, anchorM, anchorD, 7, 0, 0).getTime();
     const periodMs = days * 86400000;
     
-    // Tính toán số chu kỳ đã trôi qua so với mốc (có thể âm nếu hiện tại nhỏ hơn mốc)
     const cycles = Math.floor((now.getTime() - anchor) / periodMs);
     const start = new Date(anchor + cycles * periodMs);
     const end = new Date(start.getTime() + periodMs);
@@ -183,12 +181,9 @@ export default function Home() {
     return { start, end };
   };
 
-  // Áp dụng đúng các mốc bạn vừa cung cấp (Tháng 4 -> index là 3)
-  const d2 = getRollingPeriodWithAnchor(2026, 3, 25, 2); // 2D: Mốc 25/04/2026
-  const d3 = getRollingPeriodWithAnchor(2026, 3, 25, 3); // 3D: Mốc 25/04/2026
-  const d5 = getRollingPeriodWithAnchor(2026, 3, 22, 5); // 5D: Mốc 22/04/2026
-  
-  // Tuần thường bắt đầu từ thứ 2, dùng mốc thứ Hai gần nhất trước đó (20/04/2026)
+  const d2 = getRollingPeriodWithAnchor(2026, 3, 25, 2);
+  const d3 = getRollingPeriodWithAnchor(2026, 3, 25, 3);
+  const d5 = getRollingPeriodWithAnchor(2026, 3, 22, 5);
   const d7 = getRollingPeriodWithAnchor(2026, 3, 20, 7); 
 
   return (
@@ -205,9 +200,8 @@ export default function Home() {
 
       <div style={styles.topCardWrapper}>
         <div style={styles.introBox}>
-          {/* ĐÃ TRẢ LẠI STYLE CHỮ ĐƠN GIẢN, KHÔNG DÙNG GRADIENT ĐỂ TRÁNH LỖI */}
-          <div style={styles.simpleText}>Telegram: @tonnykay</div>
-          <div style={styles.simpleText}>Copy sàn Binance: QKay89 BMAGVN</div>
+          <div style={styles.simpleText}>Telegram: @snakekay</div>
+          <div style={styles.simpleText}>Copy sàn Binance: SnakeKay</div>
           <a 
             href="https://www.binance.com/referral/earn-together/refer2earn-usdc/claim?hl=vi&ref=GRO_28502_A4JQ8&utm_source=referral_entrance" 
             target="_blank" 
@@ -317,8 +311,77 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   );
 }
 
-// ===== COMPONENT TIMELINE =====
+// ===== COMPONENT TIMELINE MỚI CẬP NHẬT =====
 function Timeline({ title, start, end, now }: { title: string; start: Date; end: Date; now: Date; }) {
+  const [phaseData, setPhaseData] = useState({ 
+    max: 0, maxTs: 0, 
+    min: Infinity, minTs: 0, 
+    open: 0, 
+    phaseOpens: [0, 0, 0, 0] // Mảng lưu giá mở cửa của 4 pha
+  });
+
+  // Lấy dữ liệu nến cho khung thời gian cụ thể để tìm Max/Min/Open
+  useEffect(() => {
+    const fetchTimelineData = async () => {
+      const durationMs = end.getTime() - start.getTime();
+      const days = durationMs / 86400000;
+      let bar = "15m";
+      
+      // Auto scale candle bar tuỳ thuộc độ dài Timeline để không quá giới hạn 300 nến của OKX
+      if (days > 150) bar = "2D";
+      else if (days > 60) bar = "1D";
+      else if (days > 14) bar = "6H";
+      else if (days > 3) bar = "1H";
+      else bar = "15m";
+
+      try {
+        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=${bar}&limit=300`, { cache: "no-store" });
+        const json = await res.json();
+        
+        if (json.data && json.data.length > 0) {
+          const targetTs = start.getTime();
+          // Lọc các nến kể từ khi Timeline bắt đầu tới nay
+          const validData = json.data.filter((c: any) => parseInt(c[0]) >= targetTs);
+
+          if (validData.length > 0) {
+            validData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0])); // Xếp thời gian cũ đến mới
+            const open = parseFloat(validData[0][1]);
+
+            let max = -Infinity;
+            let maxTs = 0;
+            let min = Infinity;
+            let minTs = 0;
+
+            validData.forEach((c: any) => {
+              const ts = parseInt(c[0]);
+              const high = parseFloat(c[2]);
+              const low = parseFloat(c[3]);
+
+              if (high > max) { max = high; maxTs = ts; }
+              if (low < min) { min = low; minTs = ts; }
+            });
+
+            // Tìm giá mở cửa cho từng phần tư (1/4)
+            const phaseOpens = [0, 0, 0, 0];
+            const pStep = (end.getTime() - start.getTime()) / 16;
+            for (let i = 0; i < 4; i++) {
+              const pStartTs = start.getTime() + pStep * (i * 4);
+              const pCandle = validData.find((c: any) => parseInt(c[0]) >= pStartTs);
+              if (pCandle) {
+                phaseOpens[i] = parseFloat(pCandle[1]);
+              }
+            }
+
+            setPhaseData({ max, maxTs, min, minTs, open, phaseOpens });
+          }
+        }
+      } catch (error) {
+        console.error("Lỗi fetch timeline data:", error);
+      }
+    };
+    fetchTimelineData();
+  }, [start, end]);
+
   let progress = ((now.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100;
   progress = Math.max(0, Math.min(100, progress)); 
   
@@ -334,17 +397,33 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
 
   return (
     <div style={styles.timelineRow}>
-      <div style={styles.label}>{title}</div>
+      {/* HEADER CỦA TIMELINE (Gồm Tên chu kỳ + Giá mở cửa chung 1 dòng đỏ) */}
+      <div style={styles.timelineHeader}>
+        <div style={styles.label}>
+          {title} {phaseData.open > 0 ? `- Mở cửa: ${phaseData.open.toLocaleString()}` : ""}
+        </div>
+      </div>
+
       <div style={styles.responsiveGrid}>
         {phases.map((phase, phaseIdx) => {
           const [startIdx, endIdx] = phase.range;
           const phaseStartPercent = (startIdx / totalTicks) * 100;
           const phaseEndPercent = (endIdx / totalTicks) * 100;
           
+          const phaseStartTs = start.getTime() + step * startIdx;
+          const phaseEndTs = start.getTime() + step * endIdx;
+
           const isNowInPhase = progress >= phaseStartPercent && (progress < phaseEndPercent || (phaseIdx === 3 && progress === 100));
           
           let relativeProgress = ((progress - phaseStartPercent) / (phaseEndPercent - phaseStartPercent)) * 100;
           relativeProgress = Math.max(0, Math.min(100, relativeProgress));
+
+          // Kiểm tra xem Max / Min có rơi vào pha hiện tại này không để vẽ điểm
+          const isMaxInPhase = phaseData.maxTs >= phaseStartTs && (phaseData.maxTs < phaseEndTs || (phaseIdx === 3 && phaseData.maxTs <= phaseEndTs));
+          const isMinInPhase = phaseData.minTs >= phaseStartTs && (phaseData.minTs < phaseEndTs || (phaseIdx === 3 && phaseData.minTs <= phaseEndTs));
+
+          const maxRelative = isMaxInPhase ? ((phaseData.maxTs - phaseStartTs) / (phaseEndTs - phaseStartTs)) * 100 : 0;
+          const minRelative = isMinInPhase ? ((phaseData.minTs - phaseStartTs) / (phaseEndTs - phaseStartTs)) * 100 : 0;
 
           const ticks = [];
           for (let i = startIdx; i <= endIdx; i++) {
@@ -372,7 +451,27 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
                 ))}
                 
                 <div style={{ ...styles.bar, background: phase.color, opacity: isNowInPhase ? 1 : 0.6 }}>
-                  <div style={styles.phaseText}>{phase.label}</div>
+                  {/* CHẤM VÀ TEXT MAX (Được tách riêng để chữ bay lên cao hẳn, không đè ngày tháng) */}
+                  {isMaxInPhase && (
+                    <>
+                      <div style={{ ...styles.maxDot, left: `${maxRelative}%` }}></div>
+                      <div style={{ ...styles.maxText, left: `${maxRelative}%` }}>MAX {phaseData.max.toLocaleString()}</div>
+                    </>
+                  )}
+
+                  {/* THÊM GIÁ MỞ CỬA CỦA TỪNG Ô 1/4 NGAY CẠNH TÊN PHA */}
+                  <div style={styles.phaseText}>
+                    {phase.label} {phaseData.phaseOpens[phaseIdx] > 0 ? `- Mở cửa: ${phaseData.phaseOpens[phaseIdx].toLocaleString()}` : ""}
+                  </div>
+
+                  {/* CHẤM VÀ TEXT MIN (Chữ nằm thấp hơn hẳn dòng ngày tháng dưới) */}
+                  {isMinInPhase && (
+                    <>
+                      <div style={{ ...styles.minDot, left: `${minRelative}%` }}></div>
+                      <div style={{ ...styles.minText, left: `${minRelative}%` }}>MIN {phaseData.min.toLocaleString()}</div>
+                    </>
+                  )}
+
                   {isNowInPhase && (
                     <>
                       <div style={{ ...styles.line, left: `${relativeProgress}%` }}></div>
@@ -489,14 +588,19 @@ const styles: any = {
   timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "22px" },
 
   timelineRow: { marginTop: 30, padding: "0 10%" },
-  label: { color: "red", fontWeight: "bold",  textAlign: "center", fontSize: "20px", marginBottom: "50px" },
+  
+  timelineHeader: { 
+    textAlign: "center",
+    marginBottom: "40px",
+  },
+  label: { color: "red", fontWeight: "bold", fontSize: "20px" },
   
   responsiveGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "30px 10px" },
-  phaseContainer: { marginBottom: "20px" },
+  phaseContainer: { marginBottom: "40px", marginTop: "30px" }, // Chừa không gian rộng ở trên và dưới để nhét Text Max/Min
   timelineContent: { position: "relative", width: "100%" },
 
   bar: { display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "35px", borderRadius: "8px", border: "1px solid #94a3b8", position: "relative" },
-  phaseText: { color: "#2563eb", fontWeight: "bold", fontSize: "14px", zIndex: 1 },
+  phaseText: { color: "#2563eb", fontWeight: "bold", fontSize: "12px", zIndex: 1, textAlign: "center", padding: "0 5px" },
   
   line: { position: "absolute", top: -5, bottom: -5, width: 3, background: "#ef4444", zIndex: 5, borderRadius: "2px" },
 
@@ -537,5 +641,37 @@ const styles: any = {
     zIndex: 6,
     fontWeight: "bold",
     boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+  },
+
+  // ĐÃ TÁCH RIÊNG TEXT VÀ DOT CHO MAX ĐỂ TRÁNH ĐÈ
+  maxDot: {
+    position: "absolute",
+    top: "-6px", 
+    transform: "translateX(-50%)",
+    width: "12px", height: "12px", background: "#22c55e", borderRadius: "50%", border: "2px solid #fff", zIndex: 10,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+  },
+  maxText: {
+    position: "absolute",
+    bottom: "calc(100% + 45px)", // Đẩy lên hẳn phía trên các mốc thời gian
+    transform: "translateX(-50%)",
+    color: "#16a34a", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10,
+    background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" // Thêm nền mờ để luôn rõ chữ
+  },
+
+  // TƯƠNG TỰ VỚI MIN
+  minDot: {
+    position: "absolute",
+    bottom: "-6px",
+    transform: "translateX(-50%)",
+    width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%", border: "2px solid #fff", zIndex: 10,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+  },
+  minText: {
+    position: "absolute",
+    top: "calc(100% + 25px)", // Đẩy xuống hẳn phía dưới dòng text thời gian góc dưới
+    transform: "translateX(-50%)",
+    color: "#dc2626", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10,
+    background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px"
   },
 };
