@@ -602,7 +602,7 @@ const styles: any = {
   bar: { display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "35px", borderRadius: "8px", border: "1px solid #94a3b8", position: "relative" },
   phaseText: { color: "#2563eb", fontWeight: "bold", fontSize: "12px", zIndex: 1, textAlign: "center", padding: "0 5px" },
   
-  line: { position: "absolute", top: -5, bottom: -5, width: 2, background: "#ef4444", zIndex: 5, borderRadius: "2px" },
+  line: { position: "absolute", top: -5, bottom: -5, width: 3, background: "#ef4444", zIndex: 5, borderRadius: "2px" },
 
   tick: { 
     position: "absolute", 
