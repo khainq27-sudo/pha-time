@@ -315,11 +315,15 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
 function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionStyle: any }) {
   if (!types) return null;
 
-  // Tùy chỉnh kích thước hình dáng mũi tên
-  const thickness = "4px";    
-  const length = "14px";      
-  const headWidth = "4px";    
-  const headHeight = "7px";  
+  // =========================================================
+  // TÙY CHỈNH KÍCH THƯỚC MŨI TÊN TẠI ĐÂY 
+  // Bạn có thể chỉnh các con số này để thay đổi độ dày / dài
+  // =========================================================
+  const thickness = "4px";    // Độ dày của thân mũi tên
+  const length = "14px";      // Độ dài của thân mũi tên
+  const headWidth = "4px";    // Độ rộng rẽ sang 2 bên của tam giác đầu mũi tên
+  const headHeight = "7px";  // Chiều cao của tam giác đầu mũi tên
+  // =========================================================
 
   return (
     <div style={positionStyle}>
@@ -334,6 +338,7 @@ function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionS
             backgroundColor: color,
             position: "relative",
           }}>
+            {/* Tạo đầu mũi tên bằng thủ thuật CSS border */}
             <div style={{
               position: "absolute",
               left: "50%",
@@ -378,14 +383,15 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
     prev: null, p1: null, p2: null, p3: null, p4: null, half1: null, half2: null
   });
 
-  // Lấy dữ liệu nến cho khung thời gian cụ thể
+  // Lấy dữ liệu nến cho khung thời gian cụ thể để tìm Max/Min/Open và xét Mũi Tên
   useEffect(() => {
     const fetchTimelineData = async () => {
       const durationMs = end.getTime() - start.getTime();
       const days = durationMs / 86400000;
       let bar = "15m";
       
-      if (days > 150) bar = "3D"; 
+      // Auto scale candle bar. Tăng lịch sử fetch lên x2 để lấy được cả chu kỳ trước (prevPeriod)
+      if (days > 150) bar = "3D"; // Đủ fetch 900 ngày (300 nến 3D) -> Lấy cả năm trước
       else if (days > 60) bar = "1D";
       else if (days > 14) bar = "6H";
       else if (days > 5) bar = "2H";
@@ -399,11 +405,12 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
         if (json.data && json.data.length > 0) {
           const allData = json.data;
           
+          // ===== TÍNH TOÁN DATA CỦA CHU KỲ HIỆN TẠI (ĐỂ VẼ MAX/MIN) =====
           const targetTs = start.getTime();
           const validData = allData.filter((c: any) => parseInt(c[0]) >= targetTs);
 
           if (validData.length > 0) {
-            validData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0])); 
+            validData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0])); // Xếp thời gian cũ đến mới
             const open = parseFloat(validData[0][1]);
 
             let max = -Infinity;
@@ -433,6 +440,7 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
             setPhaseData({ max, maxTs, min, minTs, open, phaseOpens });
           }
 
+          // ===== TÍNH TOÁN CÁC MŨI TÊN BÁO TĂNG GIẢM 50% =====
           const getStats = (pStart: number, pEnd: number) => {
             const pData = allData.filter((c: any) => {
                const ts = parseInt(c[0]);
@@ -457,10 +465,10 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
           const calcArr = (stats: any) => {
             if (!stats) return null;
             const { open, close, high, low } = stats;
-            if (close >= open) { 
+            if (close >= open) { // Nến Xanh
               const threshold = open + (high - open) * 0.5;
               return close >= threshold ? ['UP', 'UP'] : ['UP', 'DOWN'];
-            } else { 
+            } else { // Nến Đỏ
               const threshold = open - (open - low) * 0.5;
               return close <= threshold ? ['DOWN', 'DOWN'] : ['DOWN', 'UP'];
             }
@@ -469,12 +477,12 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
           const pStep = durationMs / 16;
           setArrowStates({
             prev: calcArr(getStats(start.getTime() - durationMs, start.getTime())),
-            p1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 4)),
-            p2: calcArr(getStats(start.getTime() + pStep * 4, start.getTime() + pStep * 8)),
-            p3: calcArr(getStats(start.getTime() + pStep * 8, start.getTime() + pStep * 12)),
-            p4: calcArr(getStats(start.getTime() + pStep * 12, end.getTime())),
-            half1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 8)),
-            half2: calcArr(getStats(start.getTime() + pStep * 8, end.getTime())),
+            p1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 4)), // Quý 1
+            p2: calcArr(getStats(start.getTime() + pStep * 4, start.getTime() + pStep * 8)), // Quý 2
+            p3: calcArr(getStats(start.getTime() + pStep * 8, start.getTime() + pStep * 12)), // Quý 3
+            p4: calcArr(getStats(start.getTime() + pStep * 12, end.getTime())), // Quý 4
+            half1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 8)), // 1/2 Nửa đầu
+            half2: calcArr(getStats(start.getTime() + pStep * 8, end.getTime())), // 1/2 Nửa sau
           });
         }
       } catch (error) {
@@ -507,110 +515,112 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
 
   return (
     <div style={styles.timelineRow}>
+      {/* HEADER CỦA TIMELINE */}
       <div style={styles.timelineHeader}>
         <div style={styles.label}>
           {title} {phaseData.open > 0 ? `- Mở cửa: ${phaseData.open.toLocaleString()}` : ""}
         </div>
       </div>
 
-      {/* Wrapper cho phép vuốt ngang mượt mà trên mobile để không làm vỡ các khối */}
-      <div style={styles.timelineScrollWrapper}>
-        <div style={styles.responsiveGrid}>
-          {phases.map((phase, phaseIdx) => {
-            const [startIdx, endIdx] = phase.range;
-            const phaseStartPercent = (startIdx / totalTicks) * 100;
-            const phaseEndPercent = (endIdx / totalTicks) * 100;
-            
-            const phaseStartTs = start.getTime() + step * startIdx;
-            const phaseEndTs = start.getTime() + step * endIdx;
+      <div style={styles.responsiveGrid}>
+        {phases.map((phase, phaseIdx) => {
+          const [startIdx, endIdx] = phase.range;
+          const phaseStartPercent = (startIdx / totalTicks) * 100;
+          const phaseEndPercent = (endIdx / totalTicks) * 100;
+          
+          const phaseStartTs = start.getTime() + step * startIdx;
+          const phaseEndTs = start.getTime() + step * endIdx;
 
-            const isNowInPhase = progress >= phaseStartPercent && (progress < phaseEndPercent || (phaseIdx === 3 && progress === 100));
-            
-            let relativeProgress = ((progress - phaseStartPercent) / (phaseEndPercent - phaseStartPercent)) * 100;
-            relativeProgress = Math.max(0, Math.min(100, relativeProgress));
+          const isNowInPhase = progress >= phaseStartPercent && (progress < phaseEndPercent || (phaseIdx === 3 && progress === 100));
+          
+          let relativeProgress = ((progress - phaseStartPercent) / (phaseEndPercent - phaseStartPercent)) * 100;
+          relativeProgress = Math.max(0, Math.min(100, relativeProgress));
 
-            const isMaxInPhase = phaseData.maxTs >= phaseStartTs && (phaseData.maxTs < phaseEndTs || (phaseIdx === 3 && phaseData.maxTs <= phaseEndTs));
-            const isMinInPhase = phaseData.minTs >= phaseStartTs && (phaseData.minTs < phaseEndTs || (phaseIdx === 3 && phaseData.minTs <= phaseEndTs));
+          const isMaxInPhase = phaseData.maxTs >= phaseStartTs && (phaseData.maxTs < phaseEndTs || (phaseIdx === 3 && phaseData.maxTs <= phaseEndTs));
+          const isMinInPhase = phaseData.minTs >= phaseStartTs && (phaseData.minTs < phaseEndTs || (phaseIdx === 3 && phaseData.minTs <= phaseEndTs));
 
-            const maxRelative = isMaxInPhase ? ((phaseData.maxTs - phaseStartTs) / (phaseEndTs - phaseStartTs)) * 100 : 0;
-            const minRelative = isMinInPhase ? ((phaseData.minTs - phaseStartTs) / (phaseEndTs - phaseStartTs)) * 100 : 0;
+          const maxRelative = isMaxInPhase ? ((phaseData.maxTs - phaseStartTs) / (phaseEndTs - phaseStartTs)) * 100 : 0;
+          const minRelative = isMinInPhase ? ((phaseData.minTs - phaseStartTs) / (phaseEndTs - phaseStartTs)) * 100 : 0;
 
-            const ticks = [];
-            for (let i = startIdx; i <= endIdx; i++) {
-              const t = new Date(start.getTime() + step * i);
-              ticks.push({
-                percent: ((i - startIdx) / (endIdx - startIdx)) * 100,
-                label: t.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
-                hour: t.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-              });
-            }
+          const ticks = [];
+          for (let i = startIdx; i <= endIdx; i++) {
+            const t = new Date(start.getTime() + step * i);
+            ticks.push({
+              percent: ((i - startIdx) / (endIdx - startIdx)) * 100,
+              label: t.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
+              hour: t.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+            });
+          }
 
-            return (
-              <div key={phaseIdx} style={styles.phaseContainer}>
-                <div style={styles.timelineContent}>
-                  {ticks.map((t, i) => (
-                    <div key={i} style={{ ...styles.tick, left: `${t.percent}%` }}>
-                      {i !== 0 && i !== ticks.length - 1 && (
-                        <>
-                          <div>{t.label}</div>
-                          <div>{t.hour}</div>
-                        </>
-                      )}
-                      <div style={styles.dot}></div>
-                    </div>
-                  ))}
-                  
-                  <div style={{ ...styles.bar, background: phase.color, opacity: isNowInPhase ? 1 : 0.6 }}>
-                    
-                    {phaseIdx === 0 && (
-                      <ArrowIcon types={arrowStates.prev} positionStyle={styles.prevArrowsWrapper} />
-                    )}
-
-                    {phaseIdx === 0 && (
-                      <ArrowIcon types={arrowStates.half1} positionStyle={styles.halfArrowsWrapper} />
-                    )}
-
-                    {phaseIdx === 2 && (
-                      <ArrowIcon types={arrowStates.half2} positionStyle={styles.halfArrowsWrapper} />
-                    )}
-
-                    {isMaxInPhase && (
+          return (
+            <div key={phaseIdx} style={styles.phaseContainer}>
+              <div style={styles.timelineContent}>
+                {ticks.map((t, i) => (
+                  <div key={i} style={{ ...styles.tick, left: `${t.percent}%` }}>
+                    {i !== 0 && i !== ticks.length - 1 && (
                       <>
-                        <div style={{ ...styles.maxDot, left: `${maxRelative}%` }}></div>
-                        <div style={{ ...styles.maxText, left: `${maxRelative}%` }}>MAX {phaseData.max.toLocaleString()}</div>
+                        <div>{t.label}</div>
+                        <div>{t.hour}</div>
                       </>
                     )}
-
-                    <div style={styles.phaseText}>
-                      {phase.label} {phaseData.phaseOpens[phaseIdx] > 0 ? `- Mở cửa: ${phaseData.phaseOpens[phaseIdx].toLocaleString()}` : ""}
-                    </div>
-
-                    <ArrowIcon types={getPhaseArrows(phaseIdx)} positionStyle={styles.phaseArrowsWrapper} />
-
-                    {isMinInPhase && (
-                      <>
-                        <div style={{ ...styles.minDot, left: `${minRelative}%` }}></div>
-                        <div style={{ ...styles.minText, left: `${minRelative}%` }}>MIN {phaseData.min.toLocaleString()}</div>
-                      </>
-                    )}
-
-                    {isNowInPhase && (
-                      <>
-                        <div style={{ ...styles.line, left: `${relativeProgress}%` }}></div>
-                        <div style={{ ...styles.now, left: `${relativeProgress}%` }}>NOW</div>
-                      </>
-                    )}
+                    <div style={styles.dot}></div>
                   </div>
+                ))}
+                
+                <div style={{ ...styles.bar, background: phase.color, opacity: isNowInPhase ? 1 : 0.6 }}>
                   
-                  <div style={styles.rangeTextContainer}>
-                    <span>{ticks[0].label} {ticks[0].hour}</span>
-                    <span>{ticks[ticks.length-1].label} {ticks[ticks.length-1].hour}</span>
+                  {/* 1. MŨI TÊN CHU KỲ TRƯỚC NẰM Ở MÉP NGOÀI CÙNG BÊN TRÁI PHA 1 */}
+                  {phaseIdx === 0 && (
+                    <ArrowIcon types={arrowStates.prev} positionStyle={styles.prevArrowsWrapper} />
+                  )}
+
+                  {/* 2. MŨI TÊN 1/2 NỬA ĐẦU (NẰM TRÊN KHE GIỮA Q1 - Q2) */}
+                  {phaseIdx === 0 && (
+                    <ArrowIcon types={arrowStates.half1} positionStyle={styles.halfArrowsWrapper} />
+                  )}
+
+                  {/* 3. MŨI TÊN 1/2 NỬA SAU (NẰM TRÊN KHE GIỮA Q3 - Q4) */}
+                  {phaseIdx === 2 && (
+                    <ArrowIcon types={arrowStates.half2} positionStyle={styles.halfArrowsWrapper} />
+                  )}
+
+                  {isMaxInPhase && (
+                    <>
+                      <div style={{ ...styles.maxDot, left: `${maxRelative}%` }}></div>
+                      <div style={{ ...styles.maxText, left: `${maxRelative}%` }}>MAX {phaseData.max.toLocaleString()}</div>
+                    </>
+                  )}
+
+                  <div style={styles.phaseText}>
+                    {phase.label} {phaseData.phaseOpens[phaseIdx] > 0 ? `- Mở cửa: ${phaseData.phaseOpens[phaseIdx].toLocaleString()}` : ""}
                   </div>
+
+                  {/* MŨI TÊN CỦA TỪNG QUÝ NẰM GÓC PHẢI TRONG KHUNG */}
+                  <ArrowIcon types={getPhaseArrows(phaseIdx)} positionStyle={styles.phaseArrowsWrapper} />
+
+                  {isMinInPhase && (
+                    <>
+                      <div style={{ ...styles.minDot, left: `${minRelative}%` }}></div>
+                      <div style={{ ...styles.minText, left: `${minRelative}%` }}>MIN {phaseData.min.toLocaleString()}</div>
+                    </>
+                  )}
+
+                  {isNowInPhase && (
+                    <>
+                      <div style={{ ...styles.line, left: `${relativeProgress}%` }}></div>
+                      <div style={{ ...styles.now, left: `${relativeProgress}%` }}>NOW</div>
+                    </>
+                  )}
+                </div>
+                
+                <div style={styles.rangeTextContainer}>
+                  <span>{ticks[0].label} {ticks[0].hour}</span>
+                  <span>{ticks[ticks.length-1].label} {ticks[ticks.length-1].hour}</span>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -710,33 +720,16 @@ const styles: any = {
   minuteHand: { width: 2, height: 10, background: "#555", position: "absolute", top: 2, left: "50%", transform: "translateX(-50%) rotate(45deg)" },
   timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "22px" },
 
-  timelineRow: { marginTop: 10, padding: "0 10%" },
+  timelineRow: { marginTop: 30, padding: "0 10%" },
   
   timelineHeader: { 
-    textAlign: "left",
-    marginBottom: "5px",
+    textAlign: "center",
+    marginBottom: "40px",
   },
   label: { color: "red", fontWeight: "bold", fontSize: "20px" },
   
-  // Box bao ngoài để có thể vuốt ngang trên điện thoại
-  timelineScrollWrapper: {
-    overflowX: "auto",
-    WebkitOverflowScrolling: "touch",
-    width: "100%",
-    paddingBottom: "15px",
-  },
-  // Đã sửa thành flex nowrap để các khối không bị rớt dòng và đè lên nhau
-  responsiveGrid: { 
-    display: "flex", 
-    flexWrap: "nowrap",
-    minWidth: "800px", // Đảm bảo timeline dài đủ để render chuẩn xác
-    gap: "10px",
-    padding: "40px 20px 20px 20px" // Bơm padding để mũi tên mọc ngoài khung không bị cắt mất
-  },
-  phaseContainer: { 
-    flex: "1 1 25%", 
-    minWidth: "150px" 
-  },
+  responsiveGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "45px 10px" },
+  phaseContainer: { marginBottom: "30px", marginTop: "30px" },
   timelineContent: { position: "relative", width: "100%" },
 
   bar: { display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "40px", borderRadius: "8px", border: "1px solid #94a3b8", position: "relative" },
@@ -744,38 +737,34 @@ const styles: any = {
   
   line: { position: "absolute", top: -5, bottom: -5, width: 2, background: "#ef4444", zIndex: 5, borderRadius: "2px" },
 
-  // =========================================================================
-  // CHỈNH SỬA VỊ TRÍ CÁC MŨI TÊN TẠI ĐÂY (NẾU CẦN)
-  // Các thông số px dưới đây đã được canh an toàn, nhưng bạn có thể tuỳ ý sửa
-  // =========================================================================
+  // CÁC STYLE VỊ TRÍ MŨI TÊN MỚI
   prevArrowsWrapper: {
     position: "absolute",
-    left: "-25px", // Thay đổi số này để đẩy Mũi Tên Chu Kỳ Trước (bên trái cùng) ra xa hoặc gần
+    left: "-35px", // Đẩy ra rìa trái khung
     top: "50%",
     transform: "translateY(-50%)",
     display: "flex",
     gap: "6px",
-    zIndex: 50
+    zIndex: 10
   },
   phaseArrowsWrapper: {
     position: "absolute",
-    right: "8px", // Thay đổi số này để đẩy Mũi Tên Góc Quý (góc phải từng ô)
+    right: "10px", // Neo sát mép phải khung (bên trong khối)
     top: "50%",
     transform: "translateY(-50%)",
     display: "flex",
     gap: "6px",
-    zIndex: 50
+    zIndex: 10
   },
   halfArrowsWrapper: {
     position: "absolute",
-    right: "-5px", // Thay đổi số này để dịch chuyển ngang Mũi Tên Nửa Chu Kỳ
-    top: "-30px",  // Thay đổi số này để Nâng / Hạ Mũi Tên Nửa Chu Kỳ lơ lửng trên cao
-    transform: "translateX(50%)",
+    right: "-5px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
+    top: "-35px",  // Đẩy lơ lửng lên phía trên khung
+    transform: "translateX(50%)", // Đẩy ra chính giữa phần khe trống
     display: "flex",
     gap: "6px",
-    zIndex: 50
+    zIndex: 10
   },
-  // =========================================================================
 
   tick: { 
     position: "absolute", 
