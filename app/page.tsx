@@ -311,118 +311,186 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   );
 }
 
-// ===== COMPONENT TIMELINE MỚI CẬP NHẬT (CHUẨN XÁC GIÁ MỞ CỬA TỪNG MILISECOND) =====
+// ===== COMPONENT RENDER MŨI TÊN (CSS THAY VÌ TEXT) =====
+function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionStyle: any }) {
+  if (!types) return null;
+
+  // =========================================================
+  // TÙY CHỈNH KÍCH THƯỚC MŨI TÊN TẠI ĐÂY 
+  // Bạn có thể chỉnh các con số này để thay đổi độ dày / dài
+  // =========================================================
+  const thickness = "4px";    // Độ dày của thân mũi tên
+  const length = "14px";      // Độ dài của thân mũi tên
+  const headWidth = "4px";    // Độ rộng rẽ sang 2 bên của tam giác đầu mũi tên
+  const headHeight = "7px";  // Chiều cao của tam giác đầu mũi tên
+  // =========================================================
+
+  return (
+    <div style={positionStyle}>
+      {types.map((type, i) => {
+        const isUp = type === 'UP';
+        const color = isUp ? '#22c55e' : '#ef4444';
+        
+        return (
+          <div key={i} style={{
+            width: thickness,
+            height: length,
+            backgroundColor: color,
+            position: "relative",
+          }}>
+            {/* Tạo đầu mũi tên bằng thủ thuật CSS border */}
+            <div style={{
+              position: "absolute",
+              left: "50%",
+              transform: "translateX(-50%)",
+              ...(isUp ? {
+                top: `-${headHeight}`,
+                borderLeft: `${headWidth} solid transparent`,
+                borderRight: `${headWidth} solid transparent`,
+                borderBottom: `${headHeight} solid ${color}`
+              } : {
+                bottom: `-${headHeight}`,
+                borderLeft: `${headWidth} solid transparent`,
+                borderRight: `${headWidth} solid transparent`,
+                borderTop: `${headHeight} solid ${color}`
+              })
+            }}></div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ===== COMPONENT TIMELINE MỚI CẬP NHẬT =====
 function Timeline({ title, start, end, now }: { title: string; start: Date; end: Date; now: Date; }) {
   const [phaseData, setPhaseData] = useState({ 
     max: 0, maxTs: 0, 
     min: Infinity, minTs: 0, 
     open: 0, 
-    phaseOpens: [0, 0, 0, 0] 
+    phaseOpens: [0, 0, 0, 0]
   });
 
+  const [arrowStates, setArrowStates] = useState<{
+    prev: string[] | null, 
+    p1: string[] | null, 
+    p2: string[] | null, 
+    p3: string[] | null, 
+    p4: string[] | null,
+    half1: string[] | null, 
+    half2: string[] | null 
+  }>({
+    prev: null, p1: null, p2: null, p3: null, p4: null, half1: null, half2: null
+  });
+
+  // Lấy dữ liệu nến cho khung thời gian cụ thể để tìm Max/Min/Open và xét Mũi Tên
   useEffect(() => {
-    let isMounted = true;
-    
     const fetchTimelineData = async () => {
       const durationMs = end.getTime() - start.getTime();
       const days = durationMs / 86400000;
+      let bar = "15m";
       
-      // Auto scale nến chỉ dùng để quét TÌM MAX/MIN toàn dải
-      let barForMaxMin = "15m";
-      if (days > 150) barForMaxMin = "2D"; // Cover mốc Năm
-      else if (days > 75) barForMaxMin = "1D";
-      else if (days > 30) barForMaxMin = "6H";
-      else if (days > 12) barForMaxMin = "4H";
-      else if (days > 6) barForMaxMin = "1H";
-      else barForMaxMin = "30m";
+      // Auto scale candle bar. Tăng lịch sử fetch lên x2 để lấy được cả chu kỳ trước (prevPeriod)
+      if (days > 150) bar = "3D"; // Đủ fetch 900 ngày (300 nến 3D) -> Lấy cả năm trước
+      else if (days > 60) bar = "1D";
+      else if (days > 14) bar = "6H";
+      else if (days > 5) bar = "2H";
+      else if (days > 2) bar = "1H";
+      else bar = "15m";
 
       try {
-        // 1. Quét tìm Max / Min toàn pha
-        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=${barForMaxMin}&limit=300`, { cache: "no-store" });
+        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=${bar}&limit=300`, { cache: "no-store" });
         const json = await res.json();
         
-        const targetTs = start.getTime();
-        let max = -Infinity, maxTs = targetTs;
-        let min = Infinity, minTs = targetTs;
-
         if (json.data && json.data.length > 0) {
-          const validData = json.data.filter((c: any) => parseInt(c[0]) >= targetTs);
+          const allData = json.data;
+          
+          // ===== TÍNH TOÁN DATA CỦA CHU KỲ HIỆN TẠI (ĐỂ VẼ MAX/MIN) =====
+          const targetTs = start.getTime();
+          const validData = allData.filter((c: any) => parseInt(c[0]) >= targetTs);
+
           if (validData.length > 0) {
+            validData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0])); // Xếp thời gian cũ đến mới
+            const open = parseFloat(validData[0][1]);
+
+            let max = -Infinity;
+            let maxTs = 0;
+            let min = Infinity;
+            let minTs = 0;
+
             validData.forEach((c: any) => {
               const ts = parseInt(c[0]);
               const high = parseFloat(c[2]);
               const low = parseFloat(c[3]);
+
               if (high > max) { max = high; maxTs = ts; }
               if (low < min) { min = low; minTs = ts; }
             });
-          }
-        }
 
-        // 2. Fetch CHÍNH XÁC giá mở cửa cho 4 mốc 1/4 (Không phụ thuộc vào nến quét tổng bên trên)
-        const phaseOpens = [0, 0, 0, 0];
-        const pStep = durationMs / 16;
-        const pStarts = [
-          targetTs,
-          targetTs + pStep * 4,
-          targetTs + pStep * 8,
-          targetTs + pStep * 12
-        ];
-
-        const nowMs = new Date().getTime();
-
-        // CHỐNG QUÁ TẢI API (Rate Limit 429): Xếp hàng dựa vào Tên Timeline
-        const delays: Record<string, number> = {
-          "Năm": 0, "6 Tháng": 300, "3 Tháng": 600, "1 Tháng": 900,
-          "Tuần": 1200, "5 Ngày": 1500, "3 Ngày": 1800, "2 Ngày": 2100, "1 Ngày": 2400
-        };
-        const initialDelay = delays[title] || 0;
-        await new Promise(r => setTimeout(r, initialDelay)); // Đợi đến lượt của Timeline này
-
-        for (let i = 0; i < 4; i++) {
-          if (pStarts[i] <= nowMs) {
-            if (i > 0) await new Promise(r => setTimeout(r, 100)); // Nghỉ nhẹ giữa các pha
-
-            // Cộng thêm 1000ms để đảm bảo pagination 'after' của OKX bắt chuẩn mốc giờ đó
-            const exactTs = pStarts[i] + 1000; 
-            let fetchedOpen = 0;
-            
-            // Ưu tiên 1: Lấy nến lịch sử sâu (history-candles) phòng trường hợp quá khứ xa như Đầu Năm
-            let fetchRes = await fetch(`https://www.okx.com/api/v5/market/history-candles?instId=BTC-USDT&bar=15m&after=${exactTs}&limit=1`, { cache: "no-store" });
-            let fetchJson = await fetchRes.json();
-            
-            if (fetchJson.data && fetchJson.data.length > 0) {
-              fetchedOpen = parseFloat(fetchJson.data[0][1]);
-            } else {
-              // Ưu tiên 2: Fallback lấy nến mới hiện tại (nếu là sự kiện vừa diễn ra vài ngày trước)
-              fetchRes = await fetch(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=15m&after=${exactTs}&limit=1`, { cache: "no-store" });
-              fetchJson = await fetchRes.json();
-              if (fetchJson.data && fetchJson.data.length > 0) {
-                fetchedOpen = parseFloat(fetchJson.data[0][1]);
+            const phaseOpens = [0, 0, 0, 0];
+            const pStep = durationMs / 16;
+            for (let i = 0; i < 4; i++) {
+              const pStartTs = start.getTime() + pStep * (i * 4);
+              const pCandle = validData.find((c: any) => parseInt(c[0]) >= pStartTs);
+              if (pCandle) {
+                phaseOpens[i] = parseFloat(pCandle[1]);
               }
             }
-            phaseOpens[i] = fetchedOpen;
+
+            setPhaseData({ max, maxTs, min, minTs, open, phaseOpens });
           }
+
+          // ===== TÍNH TOÁN CÁC MŨI TÊN BÁO TĂNG GIẢM 50% =====
+          const getStats = (pStart: number, pEnd: number) => {
+            const pData = allData.filter((c: any) => {
+               const ts = parseInt(c[0]);
+               return ts >= pStart && ts < pEnd;
+            });
+            if (pData.length === 0) return null;
+            pData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0]));
+
+            const o = parseFloat(pData[0][1]);
+            const c = parseFloat(pData[pData.length - 1][4]); 
+            let h = -Infinity;
+            let l = Infinity;
+            pData.forEach((cd: any) => {
+               const high = parseFloat(cd[2]);
+               const low = parseFloat(cd[3]);
+               if (high > h) h = high;
+               if (low < l) l = low;
+            });
+            return { open: o, close: c, high: h, low: l };
+          };
+
+          const calcArr = (stats: any) => {
+            if (!stats) return null;
+            const { open, close, high, low } = stats;
+            if (close >= open) { // Nến Xanh
+              const threshold = open + (high - open) * 0.5;
+              return close >= threshold ? ['UP', 'UP'] : ['UP', 'DOWN'];
+            } else { // Nến Đỏ
+              const threshold = open - (open - low) * 0.5;
+              return close <= threshold ? ['DOWN', 'DOWN'] : ['DOWN', 'UP'];
+            }
+          };
+
+          const pStep = durationMs / 16;
+          setArrowStates({
+            prev: calcArr(getStats(start.getTime() - durationMs, start.getTime())),
+            p1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 4)), // Quý 1
+            p2: calcArr(getStats(start.getTime() + pStep * 4, start.getTime() + pStep * 8)), // Quý 2
+            p3: calcArr(getStats(start.getTime() + pStep * 8, start.getTime() + pStep * 12)), // Quý 3
+            p4: calcArr(getStats(start.getTime() + pStep * 12, end.getTime())), // Quý 4
+            half1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 8)), // 1/2 Nửa đầu
+            half2: calcArr(getStats(start.getTime() + pStep * 8, end.getTime())), // 1/2 Nửa sau
+          });
         }
-
-        if (!isMounted) return;
-
-        // Xử lý an toàn nếu dữ liệu rỗng ở những giây đầu tiên của pha mới
-        if (max === -Infinity) {
-          max = phaseOpens[0] || 0;
-          min = phaseOpens[0] || 0;
-        }
-
-        setPhaseData({ max, maxTs, min, minTs, open: phaseOpens[0], phaseOpens });
-
       } catch (error) {
-        console.error(`Lỗi fetch timeline data cho ${title}:`, error);
+        console.error("Lỗi fetch timeline data:", error);
       }
     };
-    
     fetchTimelineData();
-
-    return () => { isMounted = false; };
-  }, [start.getTime(), end.getTime(), title]); // Cố định dependency để không bị loop call API
+  }, [start, end]);
 
   let progress = ((now.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100;
   progress = Math.max(0, Math.min(100, progress)); 
@@ -437,8 +505,17 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
     { label: "1/4 cuối cùng", color: "#f9a8d4", range: [12, 16] },
   ];
 
+  const getPhaseArrows = (idx: number) => {
+    if (idx === 0) return arrowStates.p1;
+    if (idx === 1) return arrowStates.p2;
+    if (idx === 2) return arrowStates.p3;
+    if (idx === 3) return arrowStates.p4;
+    return null;
+  };
+
   return (
     <div style={styles.timelineRow}>
+      {/* HEADER CỦA TIMELINE */}
       <div style={styles.timelineHeader}>
         <div style={styles.label}>
           {title} {phaseData.open > 0 ? `- Mở cửa: ${phaseData.open.toLocaleString()}` : ""}
@@ -491,6 +568,22 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
                 ))}
                 
                 <div style={{ ...styles.bar, background: phase.color, opacity: isNowInPhase ? 1 : 0.6 }}>
+                  
+                  {/* 1. MŨI TÊN CHU KỲ TRƯỚC NẰM Ở MÉP NGOÀI CÙNG BÊN TRÁI PHA 1 */}
+                  {phaseIdx === 0 && (
+                    <ArrowIcon types={arrowStates.prev} positionStyle={styles.prevArrowsWrapper} />
+                  )}
+
+                  {/* 2. MŨI TÊN 1/2 NỬA ĐẦU (NẰM TRÊN KHE GIỮA Q1 - Q2) */}
+                  {phaseIdx === 0 && (
+                    <ArrowIcon types={arrowStates.half1} positionStyle={styles.halfArrowsWrapper} />
+                  )}
+
+                  {/* 3. MŨI TÊN 1/2 NỬA SAU (NẰM TRÊN KHE GIỮA Q3 - Q4) */}
+                  {phaseIdx === 2 && (
+                    <ArrowIcon types={arrowStates.half2} positionStyle={styles.halfArrowsWrapper} />
+                  )}
+
                   {isMaxInPhase && (
                     <>
                       <div style={{ ...styles.maxDot, left: `${maxRelative}%` }}></div>
@@ -501,6 +594,9 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
                   <div style={styles.phaseText}>
                     {phase.label} {phaseData.phaseOpens[phaseIdx] > 0 ? `- Mở cửa: ${phaseData.phaseOpens[phaseIdx].toLocaleString()}` : ""}
                   </div>
+
+                  {/* MŨI TÊN CỦA TỪNG QUÝ NẰM GÓC PHẢI TRONG KHUNG */}
+                  <ArrowIcon types={getPhaseArrows(phaseIdx)} positionStyle={styles.phaseArrowsWrapper} />
 
                   {isMinInPhase && (
                     <>
@@ -532,20 +628,80 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
 
 // ===== PHẦN STYLE =====
 const styles: any = {
-  introBox: { marginBottom: "15px", display: "flex", flexDirection: "column", gap: "8px", padding: "0 5px" },
-  simpleText: { fontSize: "16px", fontWeight: "bold", color: "#2563eb" },
-  simpleLink: { fontSize: "16px", fontWeight: "bold", color: "#2563eb", textDecoration: "none", cursor: "pointer" },
-  container: { background: "#fafafa", minHeight: "100vh", paddingBottom: "50px", fontFamily: "Arial, sans-serif", WebkitFontSmoothing: "antialiased" },
-  header: { textAlign: "center", paddingTop: 20, display: "flex", flexDirection: "column", alignItems: "center" },
-  titleWrapper: { display: "flex", alignItems: "center", justifyContent: "center", gap: "15px", flexWrap: "wrap", marginBottom: "8px" },
-  avatar: { width: "65px", height: "65px", borderRadius: "50%", objectFit: "cover", border: "3px solid #cbd5e1" },
-  title: { fontSize: "clamp(22px, 5vw, 36px)", fontWeight: "900", margin: 0, color: "#111" },
+  introBox: {
+    marginBottom: "15px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    padding: "0 5px"
+  },
+  simpleText: {
+    fontSize: "16px",
+    fontWeight: "bold",
+    color: "#2563eb", 
+  },
+  simpleLink: {
+    fontSize: "16px",
+    fontWeight: "bold",
+    color: "#2563eb",
+    textDecoration: "none", 
+    cursor: "pointer"
+  },
+  container: { 
+    background: "#fafafa", 
+    minHeight: "100vh", 
+    paddingBottom: "50px", 
+    fontFamily: "Arial, sans-serif",
+    WebkitFontSmoothing: "antialiased" 
+  },
+  header: { 
+    textAlign: "center", 
+    paddingTop: 20,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center"
+  },
+  titleWrapper: { 
+    display: "flex", 
+    alignItems: "center", 
+    justifyContent: "center", 
+    gap: "15px", 
+    flexWrap: "wrap",
+    marginBottom: "8px"
+  },
+  avatar: { 
+    width: "65px", 
+    height: "65px", 
+    borderRadius: "50%", 
+    objectFit: "cover", 
+    border: "3px solid #cbd5e1" 
+  },
+  title: { 
+    fontSize: "clamp(22px, 5vw, 36px)", 
+    fontWeight: "900", 
+    margin: 0,
+    color: "#111"
+  },
   qkay: { color: "#2563eb" },
   time: { color: "#2563eb", fontSize: "14px", marginTop: "5px" },
+
   topCardWrapper: { padding: "0 10%", marginTop: "20px" },
-  topCard: { display: "flex", flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: "20px 30px", borderRadius: "12px", border: "1px solid #e5e7eb", boxShadow: "0 2px 10px rgba(0,0,0,0.03)", gap: "30px" },
+  topCard: { 
+    display: "flex", 
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between", 
+    alignItems: "center",
+    background: "#fff", 
+    padding: "20px 30px", 
+    borderRadius: "12px", 
+    border: "1px solid #e5e7eb",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+    gap: "30px"
+  },
   candleInfoSide: { minWidth: "250px", flexShrink: 0 },
   chartSide: { flexGrow: 1, minWidth: "300px" },
+  
   candleBox: { display: "flex", gap: 15, alignItems: "flex-start" },
   candleIcon: { position: "relative", width: 12, height: 30, marginTop: 5 },
   wick: { width: 2, height: 30, background: "#22c55e", position: "absolute", left: "50%", transform: "translateX(-50%)" },
@@ -553,29 +709,129 @@ const styles: any = {
   candleTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "20px", textTransform: "uppercase" },
   market: { color: "#6b7280", fontSize: "14px", marginTop: "4px" },
   price: { fontSize: "28px", fontWeight: "bold", marginTop: "4px" },
+  
   changePercentBox: { display: "flex", gap: "10px", alignItems: "center", marginTop: "6px" },
   badge: { padding: "2px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: "bold" },
+
   timeFrameBox: { display: "flex", gap: 10, paddingLeft: "10%", marginTop: "40px", alignItems: "center" },
   clockIcon: { position: "relative", width: 24, height: 24 },
   clockCircle: { border: "2px solid #555", borderRadius: "50%", width: "100%", height: "100%" },
   hourHand: { width: 2, height: 7, background: "#555", position: "absolute", top: 5, left: "50%", transform: "translateX(-50%)" },
   minuteHand: { width: 2, height: 10, background: "#555", position: "absolute", top: 2, left: "50%", transform: "translateX(-50%) rotate(45deg)" },
   timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "22px" },
+
   timelineRow: { marginTop: 30, padding: "0 10%" },
-  timelineHeader: { textAlign: "center", marginBottom: "40px" },
+  
+  timelineHeader: { 
+    textAlign: "center",
+    marginBottom: "40px",
+  },
   label: { color: "red", fontWeight: "bold", fontSize: "20px" },
-  responsiveGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "30px 10px" },
-  phaseContainer: { marginBottom: "40px", marginTop: "30px" },
+  
+  responsiveGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "45px 10px" },
+  phaseContainer: { marginBottom: "30px", marginTop: "30px" },
   timelineContent: { position: "relative", width: "100%" },
-  bar: { display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "35px", borderRadius: "8px", border: "1px solid #94a3b8", position: "relative" },
+
+  bar: { display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "40px", borderRadius: "8px", border: "1px solid #94a3b8", position: "relative" },
   phaseText: { color: "#2563eb", fontWeight: "bold", fontSize: "12px", zIndex: 1, textAlign: "center", padding: "0 5px" },
+  
   line: { position: "absolute", top: -5, bottom: -5, width: 2, background: "#ef4444", zIndex: 5, borderRadius: "2px" },
-  tick: { position: "absolute", bottom: "100%", transform: "translate(-50%, -2px)", fontSize: "11.5px", fontWeight: "600", color: "#444", textAlign: "center", whiteSpace: "nowrap", display: "flex", flexDirection: "column", alignItems: "center", zIndex: 3 },
+
+  // CÁC STYLE VỊ TRÍ MŨI TÊN MỚI
+  prevArrowsWrapper: {
+    position: "absolute",
+    left: "-35px", // Đẩy ra rìa trái khung
+    top: "50%",
+    transform: "translateY(-50%)",
+    display: "flex",
+    gap: "6px",
+    zIndex: 10
+  },
+  phaseArrowsWrapper: {
+    position: "absolute",
+    right: "10px", // Neo sát mép phải khung (bên trong khối)
+    top: "50%",
+    transform: "translateY(-50%)",
+    display: "flex",
+    gap: "6px",
+    zIndex: 10
+  },
+  halfArrowsWrapper: {
+    position: "absolute",
+    right: "-5px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
+    top: "-35px",  // Đẩy lơ lửng lên phía trên khung
+    transform: "translateX(50%)", // Đẩy ra chính giữa phần khe trống
+    display: "flex",
+    gap: "6px",
+    zIndex: 10
+  },
+
+  tick: { 
+    position: "absolute", 
+    bottom: "100%", 
+    transform: "translate(-50%, -2px)", 
+    fontSize: "11.5px", 
+    fontWeight: "600",  
+    color: "#444",      
+    textAlign: "center", 
+    whiteSpace: "nowrap", 
+    display: "flex", 
+    flexDirection: "column", 
+    alignItems: "center", 
+    zIndex: 3 
+  },
   dot: { width: "4px", height: "4px", background: "#777", borderRadius: "50%", marginTop: "4px" },
-  rangeTextContainer: { display: "flex", justifyContent: "space-between", fontSize: "11.5px", color: "#444", marginTop: "6px", fontWeight: "600" },
-  now: { position: "absolute", top: "100%", transform: "translate(-50%, 6px)", background: "#ef4444", color: "#fff", fontSize: "10px", padding: "3px 6px", borderRadius: "4px", zIndex: 6, fontWeight: "bold", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" },
-  maxDot: { position: "absolute", top: "-6px", transform: "translateX(-50%)", width: "12px", height: "12px", background: "#22c55e", borderRadius: "50%", border: "2px solid #fff", zIndex: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" },
-  maxText: { position: "absolute", bottom: "calc(100% + 45px)", transform: "translateX(-50%)", color: "#16a34a", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10, background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" },
-  minDot: { position: "absolute", bottom: "-6px", transform: "translateX(-50%)", width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%", border: "2px solid #fff", zIndex: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" },
-  minText: { position: "absolute", top: "calc(100% + 25px)", transform: "translateX(-50%)", color: "#dc2626", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10, background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" },
+
+  rangeTextContainer: { 
+    display: "flex", 
+    justifyContent: "space-between", 
+    fontSize: "11.5px", 
+    color: "#444", 
+    marginTop: "6px", 
+    fontWeight: "600" 
+  },
+  
+  now: { 
+    position: "absolute", 
+    top: "100%", 
+    transform: "translate(-50%, 6px)", 
+    background: "#ef4444", 
+    color: "#fff", 
+    fontSize: "10px", 
+    padding: "3px 6px", 
+    borderRadius: "4px", 
+    zIndex: 6,
+    fontWeight: "bold",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+  },
+
+  maxDot: {
+    position: "absolute",
+    top: "-6px", 
+    transform: "translateX(-50%)",
+    width: "12px", height: "12px", background: "#22c55e", borderRadius: "50%", border: "2px solid #fff", zIndex: 10,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+  },
+  maxText: {
+    position: "absolute",
+    bottom: "calc(100% + 45px)", 
+    transform: "translateX(-50%)",
+    color: "#16a34a", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10,
+    background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" 
+  },
+
+  minDot: {
+    position: "absolute",
+    bottom: "-6px",
+    transform: "translateX(-50%)",
+    width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%", border: "2px solid #fff", zIndex: 10,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+  },
+  minText: {
+    position: "absolute",
+    top: "calc(100% + 25px)", 
+    transform: "translateX(-50%)",
+    color: "#dc2626", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10,
+    background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px"
+  },
 };
