@@ -467,10 +467,10 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
             const { open, close, high, low } = stats;
             if (close >= open) { // Nến Xanh
               const threshold = open + (high - open) * 0.5;
-              return close >= threshold ? ['UP', 'UP'] : ['UP', 'DOWN'];
+              return close >= threshold ? ['UP', 'UP'] : ['DOWN', 'UP'];
             } else { // Nến Đỏ
               const threshold = open - (open - low) * 0.5;
-              return close <= threshold ? ['DOWN', 'DOWN'] : ['DOWN', 'UP'];
+              return close <= threshold ? ['DOWN', 'DOWN'] : ['UP', 'DOWN'];
             }
           };
 
@@ -740,7 +740,7 @@ const styles: any = {
   // CÁC STYLE VỊ TRÍ MŨI TÊN MỚI
   prevArrowsWrapper: {
     position: "absolute",
-    left: "-35px", // Đẩy ra rìa trái khung
+    left: "-19px", // Đẩy ra rìa trái khung
     top: "50%",
     transform: "translateY(-50%)",
     display: "flex",
@@ -758,7 +758,7 @@ const styles: any = {
   },
   halfArrowsWrapper: {
     position: "absolute",
-    right: "-5px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
+    right: "-27px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
     top: "-35px",  // Đẩy lơ lửng lên phía trên khung
     transform: "translateX(50%)", // Đẩy ra chính giữa phần khe trống
     display: "flex",
