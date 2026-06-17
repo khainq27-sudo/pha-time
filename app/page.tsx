@@ -737,26 +737,32 @@ const styles: any = {
   
   line: { position: "absolute", top: -5, bottom: -5, width: 2, background: "#ef4444", zIndex: 5, borderRadius: "2px" },
 
-  // CÁC STYLE VỊ TRÍ MŨI TÊN ĐÃ TỐI ƯU CHO MOBILE
+  // CÁC STYLE VỊ TRÍ MŨI TÊN MỚI
   prevArrowsWrapper: {
+    position: "absolute",
+    left: "-35px", // Đẩy ra rìa trái khung
+    top: "50%",
+    transform: "translateY(-50%)",
     display: "flex",
-    gap: "4px",
-    justifyContent: "center",
-    marginBottom: "5px", // Đưa mũi tên lên trên khung thay vì nằm ngoài rìa
+    gap: "6px",
     zIndex: 10
   },
   phaseArrowsWrapper: {
+    position: "absolute",
+    right: "10px", // Neo sát mép phải khung (bên trong khối)
+    top: "50%",
+    transform: "translateY(-50%)",
     display: "flex",
-    gap: "4px",
-    justifyContent: "center",
-    marginTop: "5px", // Đưa mũi tên vào trong khung, bên dưới text
+    gap: "6px",
     zIndex: 10
   },
   halfArrowsWrapper: {
+    position: "absolute",
+    right: "-5px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
+    top: "-35px",  // Đẩy lơ lửng lên phía trên khung
+    transform: "translateX(50%)", // Đẩy ra chính giữa phần khe trống
     display: "flex",
-    gap: "4px",
-    justifyContent: "center",
-    margin: "5px 0", // Hiển thị mũi tên nằm giữa các phần
+    gap: "6px",
     zIndex: 10
   },
 
