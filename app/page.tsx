@@ -758,7 +758,7 @@ const styles: any = {
   },
   halfArrowsWrapper: {
     position: "absolute",
-    right: "-27px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
+    right: "19px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
     top: "-35px",  // Đẩy lơ lửng lên phía trên khung
     transform: "translateX(50%)", // Đẩy ra chính giữa phần khe trống
     display: "flex",
