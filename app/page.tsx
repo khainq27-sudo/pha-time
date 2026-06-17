@@ -652,7 +652,10 @@ const styles: any = {
     minHeight: "100vh", 
     paddingBottom: "50px", 
     fontFamily: "Arial, sans-serif",
-    WebkitFontSmoothing: "antialiased" 
+    WebkitFontSmoothing: "antialiased", 
+    width: "100%",           // Thêm dòng này
+    overflowX: "hidden",     // Thêm dòng này (Tránh cuộn ngang màn hình)
+    boxSizing: "border-box"  // Thêm dòng này
   },
   header: { 
     textAlign: "center", 
@@ -685,7 +688,12 @@ const styles: any = {
   qkay: { color: "#2563eb" },
   time: { color: "#2563eb", fontSize: "14px", marginTop: "5px" },
 
-  topCardWrapper: { padding: "0 10%", marginTop: "20px" },
+  topCardWrapper: { 
+    padding: "0 15px", 
+    marginTop: "20px", 
+    width: "100%", 
+    boxSizing: "border-box"
+  },
   topCard: { 
     display: "flex", 
     flexDirection: "row",
@@ -713,14 +721,25 @@ const styles: any = {
   changePercentBox: { display: "flex", gap: "10px", alignItems: "center", marginTop: "6px" },
   badge: { padding: "2px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: "bold" },
 
-  timeFrameBox: { display: "flex", gap: 10, paddingLeft: "10%", marginTop: "40px", alignItems: "center" },
+  timeFrameBox: {
+    display: "flex", 
+    gap: 10, 
+    paddingLeft: "15px", 
+    marginTop: "40px", 
+    alignItems: "center" 
+  },
   clockIcon: { position: "relative", width: 24, height: 24 },
   clockCircle: { border: "2px solid #555", borderRadius: "50%", width: "100%", height: "100%" },
   hourHand: { width: 2, height: 7, background: "#555", position: "absolute", top: 5, left: "50%", transform: "translateX(-50%)" },
   minuteHand: { width: 2, height: 10, background: "#555", position: "absolute", top: 2, left: "50%", transform: "translateX(-50%) rotate(45deg)" },
   timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "22px" },
 
-  timelineRow: { marginTop: 30, padding: "0 10%" },
+  timelineRow: { 
+    marginTop: 30, 
+    padding: "0 15px",
+    width: "100%", 
+    boxSizing: "border-box" 
+  },
   
   timelineHeader: { 
     textAlign: "center",
@@ -728,7 +747,13 @@ const styles: any = {
   },
   label: { color: "red", fontWeight: "bold", fontSize: "20px" },
   
-  responsiveGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "45px 10px" },
+  responsiveGrid: { 
+    display: "grid", 
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", 
+    gap: "45px 10px",
+    paddingLeft: "35px",     // Thêm dòng này (Để chừa không gian cho mũi tên lòi ra)
+    paddingRight: "10px"     // Thêm dòng này
+  },
   phaseContainer: { marginBottom: "30px", marginTop: "30px" },
   timelineContent: { position: "relative", width: "100%" },
 
