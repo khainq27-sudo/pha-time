@@ -740,7 +740,7 @@ const styles: any = {
   // CÁC STYLE VỊ TRÍ MŨI TÊN MỚI
   prevArrowsWrapper: {
     position: "absolute",
-    left: "-27px", // Đẩy ra rìa trái khung
+    left: "-19px", // Đẩy ra rìa trái khung
     top: "50%",
     transform: "translateY(-50%)",
     display: "flex",
@@ -749,7 +749,7 @@ const styles: any = {
   },
   phaseArrowsWrapper: {
     position: "absolute",
-    right: "9px", // Neo sát mép phải khung (bên trong khối)
+    right: "10px", // Neo sát mép phải khung (bên trong khối)
     top: "50%",
     transform: "translateY(-50%)",
     display: "flex",
@@ -758,7 +758,7 @@ const styles: any = {
   },
   halfArrowsWrapper: {
     position: "absolute",
-    right: "-2px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
+    right: "-5px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
     top: "-35px",  // Đẩy lơ lửng lên phía trên khung
     transform: "translateX(50%)", // Đẩy ra chính giữa phần khe trống
     display: "flex",
