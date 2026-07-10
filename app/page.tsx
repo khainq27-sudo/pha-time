@@ -258,15 +258,15 @@ export default function Home() {
         <div style={styles.timeFrameTitle}>KHUNG THỜI GIAN</div>
       </div>
 
-      <Timeline title="Năm" start={startYear} end={endYear} now={now} />
-      <Timeline title="6 Tháng" start={startHalf} end={endHalf} now={now} />
-      <Timeline title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} />
-      <Timeline title="1 Tháng" start={startMonth} end={endMonth} now={now} />
-      <Timeline title="Tuần" start={d7.start} end={d7.end} now={now} />
-      <Timeline title="5 Ngày" start={d5.start} end={d5.end} now={now} />
-      <Timeline title="3 Ngày" start={d3.start} end={d3.end} now={now} />
-      <Timeline title="2 Ngày" start={d2.start} end={d2.end} now={now} />
-      <Timeline title="1 Ngày" start={startDay} end={endDay} now={now} />
+      <Timeline title="Năm" start={startYear} end={endYear} now={now} currentPrice={parseFloat(price)} />
+      <Timeline title="6 Tháng" start={startHalf} end={endHalf} now={now} currentPrice={parseFloat(price)} />
+      <Timeline title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} currentPrice={parseFloat(price)} />
+      <Timeline title="1 Tháng" start={startMonth} end={endMonth} now={now} currentPrice={parseFloat(price)} />
+      <Timeline title="Tuần" start={d7.start} end={d7.end} now={now} currentPrice={parseFloat(price)} />
+      <Timeline title="5 Ngày" start={d5.start} end={d5.end} now={now} currentPrice={parseFloat(price)} />
+      <Timeline title="3 Ngày" start={d3.start} end={d3.end} now={now} currentPrice={parseFloat(price)} />
+      <Timeline title="2 Ngày" start={d2.start} end={d2.end} now={now} currentPrice={parseFloat(price)} />
+      <Timeline title="1 Ngày" start={startDay} end={endDay} now={now} currentPrice={parseFloat(price)} />
     </div>
   );
 }
@@ -363,7 +363,7 @@ function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionS
 }
 
 // ===== COMPONENT TIMELINE MỚI CẬP NHẬT =====
-function Timeline({ title, start, end, now }: { title: string; start: Date; end: Date; now: Date; }) {
+function Timeline({ title, start, end, now, currentPrice }: { title: string; start: Date; end: Date; now: Date; currentPrice: number; }) {
   const [phaseData, setPhaseData] = useState({ 
     max: 0, maxTs: 0, 
     min: Infinity, minTs: 0, 
@@ -492,6 +492,28 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
     fetchTimelineData();
   }, [start, end]);
 
+  // ===== TÍNH TOÁN LOGIC MŨI TÊN DÀNH CHO TIÊU ĐỀ =====
+  const o = phaseData.open;
+  const c = currentPrice;
+  // Cập nhật High/Low realtime vào đỉnh đáy cũ của Phase
+  const h = Math.max(phaseData.max, isNaN(c) ? -Infinity : c);
+  const l = Math.min(phaseData.min, isNaN(c) ? Infinity : c);
+
+  let headerArrows: string[] | null = null;
+  let isUpPrice = true;
+
+  if (o > 0 && !isNaN(c) && c > 0) {
+    isUpPrice = c >= o;
+    if (c >= o) {
+      const threshold = o + (h - o) * 0.5;
+      headerArrows = c >= threshold ? ['UP', 'UP'] : ['DOWN', 'UP'];
+    } else {
+      const threshold = o - (o - l) * 0.5;
+      headerArrows = c <= threshold ? ['DOWN', 'DOWN'] : ['UP', 'DOWN'];
+    }
+  }
+  // ====================================================
+
   let progress = ((now.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100;
   progress = Math.max(0, Math.min(100, progress)); 
   
@@ -515,10 +537,19 @@ function Timeline({ title, start, end, now }: { title: string; start: Date; end:
 
   return (
     <div style={styles.timelineRow}>
-      {/* HEADER CỦA TIMELINE */}
+      {/* HEADER CỦA TIMELINE (Đã bổ sung Mũi tên & Giá hiện tại) */}
       <div style={styles.timelineHeader}>
-        <div style={styles.label}>
-          {title} {phaseData.open > 0 ? `- Mở cửa: ${phaseData.open.toLocaleString()}` : ""}
+        <div style={{ ...styles.label, display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          <span>{title} {o > 0 ? `- Mở cửa: ${o.toLocaleString()}` : ""}</span>
+          
+          {headerArrows && (
+            <>
+              <span style={{ color: "red", fontWeight: "bold" }}>-</span>
+              <ArrowIcon types={headerArrows} positionStyle={{ display: 'flex', gap: '6px', alignItems: 'center' }} />
+              <span style={{ color: "red", fontWeight: "bold" }}>-</span>
+              <span style={{ color: isUpPrice ? "#22c55e" : "#ef4444" }}>{c.toLocaleString()} USDT</span>
+            </>
+          )}
         </div>
       </div>
 
