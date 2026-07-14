@@ -8,6 +8,7 @@ export default function Home() {
   const [openPrice, setOpenPrice] = useState(""); // Giá mở cửa 7h sáng
   const [now, setNow] = useState<Date | null>(null); // Tránh lỗi Hydration
   const [chartData, setChartData] = useState<number[]>([]); // Dữ liệu sóng
+  const [coin, setCoin] = useState("BTC"); // State chọn coin
 
   // 1. Cập nhật đồng hồ
   useEffect(() => {
@@ -29,12 +30,12 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // 2. Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m)
+  // 2. Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m) phụ thuộc vào coin
   useEffect(() => {
     const fetchChartData = async () => {
       try {
         const res = await fetch(
-          "https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=5m&limit=300",
+          `https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=5m&limit=300`,
           { cache: "no-store" }
         );
         const json = await res.json();
@@ -57,15 +58,23 @@ export default function Home() {
       }
     };
 
+    // Reset dữ liệu cũ khi đổi coin
+    setChartData([]);
+    
     fetchChartData();
     const interval = setInterval(fetchChartData, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [coin]);
 
-  // 3. WebSocket lấy giá realtime và giá mở cửa
+  // 3. WebSocket lấy giá realtime và giá mở cửa phụ thuộc vào coin
   useEffect(() => {
     let ws: WebSocket;
     let reconnectTimeout: NodeJS.Timeout;
+
+    // Reset giá khi đổi coin
+    setPrice("");
+    setPrevPrice("");
+    setOpenPrice("");
 
     const connectWebSocket = () => {
       ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
@@ -74,7 +83,7 @@ export default function Home() {
         ws.send(
           JSON.stringify({
             op: "subscribe",
-            args: [{ channel: "tickers", instId: "BTC-USDT" }],
+            args: [{ channel: "tickers", instId: `${coin}-USDT` }],
           })
         );
       };
@@ -108,7 +117,7 @@ export default function Home() {
       clearTimeout(reconnectTimeout);
       if (ws) ws.close();
     };
-  }, []);
+  }, [coin]);
 
   if (!now) return null;
 
@@ -220,7 +229,14 @@ export default function Home() {
               </div>
               <div>
                 <div style={styles.candleTitle}>THÔNG TIN NẾN</div>
-                <div style={styles.market}>Bitcoin / USDT</div>
+                <select 
+                  value={coin} 
+                  onChange={(e) => setCoin(e.target.value)}
+                  style={styles.coinSelect}
+                >
+                  <option value="BTC">BTC / USDT</option>
+                  <option value="ETH">ETH / USDT</option>
+                </select>
                 <div
                   style={{
                     ...styles.price,
@@ -258,15 +274,15 @@ export default function Home() {
         <div style={styles.timeFrameTitle}>KHUNG THỜI GIAN</div>
       </div>
 
-      <Timeline title="Năm" start={startYear} end={endYear} now={now} currentPrice={parseFloat(price)} />
-      <Timeline title="6 Tháng" start={startHalf} end={endHalf} now={now} currentPrice={parseFloat(price)} />
-      <Timeline title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} currentPrice={parseFloat(price)} />
-      <Timeline title="1 Tháng" start={startMonth} end={endMonth} now={now} currentPrice={parseFloat(price)} />
-      <Timeline title="Tuần" start={d7.start} end={d7.end} now={now} currentPrice={parseFloat(price)} />
-      <Timeline title="5 Ngày" start={d5.start} end={d5.end} now={now} currentPrice={parseFloat(price)} />
-      <Timeline title="3 Ngày" start={d3.start} end={d3.end} now={now} currentPrice={parseFloat(price)} />
-      <Timeline title="2 Ngày" start={d2.start} end={d2.end} now={now} currentPrice={parseFloat(price)} />
-      <Timeline title="1 Ngày" start={startDay} end={endDay} now={now} currentPrice={parseFloat(price)} />
+      <Timeline title="Năm" start={startYear} end={endYear} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline title="6 Tháng" start={startHalf} end={endHalf} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline title="1 Tháng" start={startMonth} end={endMonth} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline title="Tuần" start={d7.start} end={d7.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline title="5 Ngày" start={d5.start} end={d5.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline title="3 Ngày" start={d3.start} end={d3.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline title="2 Ngày" start={d2.start} end={d2.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline title="1 Ngày" start={startDay} end={endDay} now={now} currentPrice={parseFloat(price)} coin={coin} />
     </div>
   );
 }
@@ -315,15 +331,10 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
 function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionStyle: any }) {
   if (!types) return null;
 
-  // =========================================================
-  // TÙY CHỈNH KÍCH THƯỚC MŨI TÊN TẠI ĐÂY 
-  // Bạn có thể chỉnh các con số này để thay đổi độ dày / dài
-  // =========================================================
   const thickness = "4px";    // Độ dày của thân mũi tên
   const length = "14px";      // Độ dài của thân mũi tên
   const headWidth = "4px";    // Độ rộng rẽ sang 2 bên của tam giác đầu mũi tên
   const headHeight = "7px";  // Chiều cao của tam giác đầu mũi tên
-  // =========================================================
 
   return (
     <div style={positionStyle}>
@@ -338,7 +349,6 @@ function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionS
             backgroundColor: color,
             position: "relative",
           }}>
-            {/* Tạo đầu mũi tên bằng thủ thuật CSS border */}
             <div style={{
               position: "absolute",
               left: "50%",
@@ -363,7 +373,7 @@ function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionS
 }
 
 // ===== COMPONENT TIMELINE MỚI CẬP NHẬT =====
-function Timeline({ title, start, end, now, currentPrice }: { title: string; start: Date; end: Date; now: Date; currentPrice: number; }) {
+function Timeline({ title, start, end, now, currentPrice, coin }: { title: string; start: Date; end: Date; now: Date; currentPrice: number; coin: string; }) {
   const [phaseData, setPhaseData] = useState({ 
     max: 0, maxTs: 0, 
     min: Infinity, minTs: 0, 
@@ -383,15 +393,14 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
     prev: null, p1: null, p2: null, p3: null, p4: null, half1: null, half2: null
   });
 
-  // Lấy dữ liệu nến cho khung thời gian cụ thể để tìm Max/Min/Open và xét Mũi Tên
+  // Lấy dữ liệu nến phụ thuộc vào biến coin
   useEffect(() => {
     const fetchTimelineData = async () => {
       const durationMs = end.getTime() - start.getTime();
       const days = durationMs / 86400000;
       let bar = "15m";
       
-      // Auto scale candle bar. Tăng lịch sử fetch lên x2 để lấy được cả chu kỳ trước (prevPeriod)
-      if (days > 150) bar = "3D"; // Đủ fetch 900 ngày (300 nến 3D) -> Lấy cả năm trước
+      if (days > 150) bar = "3D"; 
       else if (days > 60) bar = "1D";
       else if (days > 14) bar = "6H";
       else if (days > 5) bar = "2H";
@@ -399,18 +408,17 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
       else bar = "15m";
 
       try {
-        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=${bar}&limit=300`, { cache: "no-store" });
+        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${bar}&limit=300`, { cache: "no-store" });
         const json = await res.json();
         
         if (json.data && json.data.length > 0) {
           const allData = json.data;
           
-          // ===== TÍNH TOÁN DATA CỦA CHU KỲ HIỆN TẠI (ĐỂ VẼ MAX/MIN) =====
           const targetTs = start.getTime();
           const validData = allData.filter((c: any) => parseInt(c[0]) >= targetTs);
 
           if (validData.length > 0) {
-            validData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0])); // Xếp thời gian cũ đến mới
+            validData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0])); 
             const open = parseFloat(validData[0][1]);
 
             let max = -Infinity;
@@ -440,7 +448,6 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
             setPhaseData({ max, maxTs, min, minTs, open, phaseOpens });
           }
 
-          // ===== TÍNH TOÁN CÁC MŨI TÊN BÁO TĂNG GIẢM 50% =====
           const getStats = (pStart: number, pEnd: number) => {
             const pData = allData.filter((c: any) => {
                const ts = parseInt(c[0]);
@@ -465,10 +472,10 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
           const calcArr = (stats: any) => {
             if (!stats) return null;
             const { open, close, high, low } = stats;
-            if (close >= open) { // Nến Xanh
+            if (close >= open) { 
               const threshold = open + (high - open) * 0.5;
               return close >= threshold ? ['UP', 'UP'] : ['DOWN', 'UP'];
-            } else { // Nến Đỏ
+            } else { 
               const threshold = open - (open - low) * 0.5;
               return close <= threshold ? ['DOWN', 'DOWN'] : ['UP', 'DOWN'];
             }
@@ -477,12 +484,12 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
           const pStep = durationMs / 16;
           setArrowStates({
             prev: calcArr(getStats(start.getTime() - durationMs, start.getTime())),
-            p1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 4)), // Quý 1
-            p2: calcArr(getStats(start.getTime() + pStep * 4, start.getTime() + pStep * 8)), // Quý 2
-            p3: calcArr(getStats(start.getTime() + pStep * 8, start.getTime() + pStep * 12)), // Quý 3
-            p4: calcArr(getStats(start.getTime() + pStep * 12, end.getTime())), // Quý 4
-            half1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 8)), // 1/2 Nửa đầu
-            half2: calcArr(getStats(start.getTime() + pStep * 8, end.getTime())), // 1/2 Nửa sau
+            p1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 4)), 
+            p2: calcArr(getStats(start.getTime() + pStep * 4, start.getTime() + pStep * 8)), 
+            p3: calcArr(getStats(start.getTime() + pStep * 8, start.getTime() + pStep * 12)), 
+            p4: calcArr(getStats(start.getTime() + pStep * 12, end.getTime())), 
+            half1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 8)), 
+            half2: calcArr(getStats(start.getTime() + pStep * 8, end.getTime())), 
           });
         }
       } catch (error) {
@@ -490,12 +497,11 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
       }
     };
     fetchTimelineData();
-  }, [start, end]);
+  }, [start, end, coin]); // Thêm coin vào mảng phụ thuộc
 
   // ===== TÍNH TOÁN LOGIC MŨI TÊN DÀNH CHO TIÊU ĐỀ =====
   const o = phaseData.open;
   const c = currentPrice;
-  // Cập nhật High/Low realtime vào đỉnh đáy cũ của Phase
   const h = Math.max(phaseData.max, isNaN(c) ? -Infinity : c);
   const l = Math.min(phaseData.min, isNaN(c) ? Infinity : c);
 
@@ -512,7 +518,6 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
       headerArrows = c <= threshold ? ['DOWN', 'DOWN'] : ['UP', 'DOWN'];
     }
   }
-  // ====================================================
 
   let progress = ((now.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100;
   progress = Math.max(0, Math.min(100, progress)); 
@@ -537,7 +542,6 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
 
   return (
     <div style={styles.timelineRow}>
-      {/* HEADER CỦA TIMELINE (Đã bổ sung Mũi tên & Giá hiện tại) */}
       <div style={styles.timelineHeader}>
         <div style={{ ...styles.label, display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <span>{title} {o > 0 ? `- Mở cửa: ${o.toLocaleString()}` : ""}</span>
@@ -600,17 +604,14 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
                 
                 <div style={{ ...styles.bar, background: phase.color, opacity: isNowInPhase ? 1 : 0.6 }}>
                   
-                  {/* 1. MŨI TÊN CHU KỲ TRƯỚC NẰM Ở MÉP NGOÀI CÙNG BÊN TRÁI PHA 1 */}
                   {phaseIdx === 0 && (
                     <ArrowIcon types={arrowStates.prev} positionStyle={styles.prevArrowsWrapper} />
                   )}
 
-                  {/* 2. MŨI TÊN 1/2 NỬA ĐẦU (NẰM TRÊN KHE GIỮA Q1 - Q2) */}
                   {phaseIdx === 0 && (
                     <ArrowIcon types={arrowStates.half1} positionStyle={styles.halfArrowsWrapper} />
                   )}
 
-                  {/* 3. MŨI TÊN 1/2 NỬA SAU (NẰM TRÊN KHE GIỮA Q3 - Q4) */}
                   {phaseIdx === 2 && (
                     <ArrowIcon types={arrowStates.half2} positionStyle={styles.halfArrowsWrapper} />
                   )}
@@ -626,7 +627,6 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
                     {phase.label} {phaseData.phaseOpens[phaseIdx] > 0 ? `- Mở cửa: ${phaseData.phaseOpens[phaseIdx].toLocaleString()}` : ""}
                   </div>
 
-                  {/* MŨI TÊN CỦA TỪNG QUÝ NẰM GÓC PHẢI TRONG KHUNG */}
                   <ArrowIcon types={getPhaseArrows(phaseIdx)} positionStyle={styles.phaseArrowsWrapper} />
 
                   {isMinInPhase && (
@@ -738,7 +738,17 @@ const styles: any = {
   wick: { width: 2, height: 30, background: "#22c55e", position: "absolute", left: "50%", transform: "translateX(-50%)" },
   body: { width: 10, height: 18, background: "#22c55e", position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)" },
   candleTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "20px", textTransform: "uppercase" },
-  market: { color: "#6b7280", fontSize: "14px", marginTop: "4px" },
+  coinSelect: { 
+    color: "#6b7280", 
+    fontSize: "14px", 
+    marginTop: "4px", 
+    padding: "2px 5px", 
+    border: "1px solid #e5e7eb", 
+    borderRadius: "4px",
+    background: "#f9fafb",
+    cursor: "pointer",
+    outline: "none"
+  },
   price: { fontSize: "28px", fontWeight: "bold", marginTop: "4px" },
   
   changePercentBox: { display: "flex", gap: "10px", alignItems: "center", marginTop: "6px" },
@@ -768,10 +778,9 @@ const styles: any = {
   
   line: { position: "absolute", top: -5, bottom: -5, width: 2, background: "#ef4444", zIndex: 5, borderRadius: "2px" },
 
-  // CÁC STYLE VỊ TRÍ MŨI TÊN MỚI
   prevArrowsWrapper: {
     position: "absolute",
-    left: "-19px", // Đẩy ra rìa trái khung
+    left: "-19px", 
     top: "50%",
     transform: "translateY(-50%)",
     display: "flex",
@@ -780,7 +789,7 @@ const styles: any = {
   },
   phaseArrowsWrapper: {
     position: "absolute",
-    right: "10px", // Neo sát mép phải khung (bên trong khối)
+    right: "10px", 
     top: "50%",
     transform: "translateY(-50%)",
     display: "flex",
@@ -789,9 +798,9 @@ const styles: any = {
   },
   halfArrowsWrapper: {
     position: "absolute",
-    right: "19px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
-    top: "-35px",  // Đẩy lơ lửng lên phía trên khung
-    transform: "translateX(50%)", // Đẩy ra chính giữa phần khe trống
+    right: "19px", 
+    top: "-35px",  
+    transform: "translateX(50%)", 
     display: "flex",
     gap: "6px",
     zIndex: 10
@@ -843,26 +852,7 @@ const styles: any = {
     width: "12px", height: "12px", background: "#22c55e", borderRadius: "50%", border: "2px solid #fff", zIndex: 10,
     boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
   },
-  maxText: {
-    position: "absolute",
-    bottom: "calc(100% + 45px)", 
-    transform: "translateX(-50%)",
-    color: "#16a34a", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10,
-    background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" 
-  },
-
-  minDot: {
-    position: "absolute",
-    bottom: "-6px",
-    transform: "translateX(-50%)",
-    width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%", border: "2px solid #fff", zIndex: 10,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
-  },
-  minText: {
-    position: "absolute",
-    top: "calc(100% + 25px)", 
-    transform: "translateX(-50%)",
-    color: "#dc2626", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10,
-    background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px"
-  },
+  maxText: { position: "absolute", top: "-25px", transform: "translateX(-50%)", color: "#22c55e", fontWeight: "bold", fontSize: "11px", zIndex: 10, whiteSpace: "nowrap" },
+  minDot: { position: "absolute", bottom: "-6px", transform: "translateX(-50%)", width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%", border: "2px solid #fff", zIndex: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" },
+  minText: { position: "absolute", bottom: "-25px", transform: "translateX(-50%)", color: "#ef4444", fontWeight: "bold", fontSize: "11px", zIndex: 10, whiteSpace: "nowrap" }
 };
