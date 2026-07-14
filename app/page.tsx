@@ -5,11 +5,9 @@ export default function Home() {
   const [time, setTime] = useState("");
   const [price, setPrice] = useState("");
   const [prevPrice, setPrevPrice] = useState("");
-  const [openPrice, setOpenPrice] = useState(""); // Giá mở cửa 7h sáng
-  const [now, setNow] = useState<Date | null>(null); // Tránh lỗi Hydration
-  const [chartData, setChartData] = useState<number[]>([]); // Dữ liệu sóng
-  
-  // STATE MỚI: Quản lý coin đang chọn
+  const [openPrice, setOpenPrice] = useState(""); 
+  const [now, setNow] = useState<Date | null>(null); 
+  const [chartData, setChartData] = useState<number[]>([]); 
   const [coin, setCoin] = useState("BTC");
 
   // 1. Cập nhật đồng hồ
@@ -34,6 +32,9 @@ export default function Home() {
 
   // 2. Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m)
   useEffect(() => {
+    let ignore = false; // Ngăn chặn Race Condition
+    setChartData([]); // Xoá sóng cũ ngay lập tức khi đổi coin
+
     const fetchChartData = async () => {
       try {
         const res = await fetch(
@@ -41,6 +42,9 @@ export default function Home() {
           { cache: "no-store" }
         );
         const json = await res.json();
+        
+        if (ignore) return; // Nếu đã chuyển sang coin khác, bỏ qua dữ liệu cũ
+
         if (json.data) {
           const currentTime = new Date();
           const startDay = new Date(currentTime);
@@ -58,19 +62,22 @@ export default function Home() {
       }
     };
     
-    // Đặt lại dữ liệu sóng khi đổi coin để tránh giật lag hiển thị
-    setChartData([]);
     fetchChartData();
     const interval = setInterval(fetchChartData, 60000);
-    return () => clearInterval(interval);
-  }, [coin]); // Chạy lại khi coin thay đổi
+    
+    return () => {
+      ignore = true; // Hủy cập nhật state nếu component unmount hoặc đổi coin
+      clearInterval(interval);
+    };
+  }, [coin]);
 
   // 3. WebSocket lấy giá realtime và giá mở cửa
   useEffect(() => {
     let ws: WebSocket;
     let reconnectTimeout: NodeJS.Timeout;
-    
-    // Reset giá khi chuyển coin
+    let ignore = false; // Chặn cập nhật giá từ websocket cũ
+
+    // Clear giá trị hiển thị lập tức khi đổi Coin
     setPrice("");
     setPrevPrice("");
     setOpenPrice("");
@@ -78,6 +85,7 @@ export default function Home() {
     const connectWebSocket = () => {
       ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
       ws.onopen = () => {
+        if (ignore) return;
         ws.send(
           JSON.stringify({
             op: "subscribe",
@@ -85,7 +93,10 @@ export default function Home() {
           })
         );
       };
+      
       ws.onmessage = (event) => {
+        if (ignore) return; // Bỏ qua message nếu đã chuyển coin
+        
         const data = JSON.parse(event.data);
         if (data.data && data.data.length > 0) {
           const ticker = data.data[0];
@@ -101,16 +112,22 @@ export default function Home() {
           }
         }
       };
+      
       ws.onclose = () => {
-        reconnectTimeout = setTimeout(connectWebSocket, 3000);
+        if (!ignore) {
+          reconnectTimeout = setTimeout(connectWebSocket, 3000);
+        }
       };
     };
+    
     connectWebSocket();
+    
     return () => {
+      ignore = true;
       clearTimeout(reconnectTimeout);
       if (ws) ws.close();
     };
-  }, [coin]); // Chạy lại khi coin thay đổi
+  }, [coin]); 
 
   if (!now) return null;
 
@@ -132,11 +149,10 @@ export default function Home() {
 
   // ===== TÍNH TOÁN CÁC BIẾN THỜI GIAN =====
   const y = now.getFullYear();
-  // NĂM
   let startYear = get7AM(y, 0, 1);
   if (now < startYear) startYear = get7AM(y - 1, 0, 1);
   const endYear = get7AM(startYear.getFullYear() + 1, 0, 1);
-  // 6 THÁNG
+
   let hMonth = now.getMonth() >= 6 ? 6 : 0;
   let startHalf = get7AM(startYear.getFullYear(), hMonth, 1);
   if (now < startHalf) {
@@ -145,35 +161,32 @@ export default function Home() {
     startHalf = get7AM(yHalf, hMonth, 1);
   }
   const endHalf = get7AM(startHalf.getFullYear(), startHalf.getMonth() + 6, 1);
-  // 3 THÁNG (QUÝ)
+
   let qMonth = Math.floor(now.getMonth() / 3) * 3;
   let quarterStart = get7AM(now.getFullYear(), qMonth, 1);
   if (now < quarterStart) {
     quarterStart = get7AM(quarterStart.getFullYear(), quarterStart.getMonth() - 3, 1);
   }
   const quarterEnd = get7AM(quarterStart.getFullYear(), quarterStart.getMonth() + 3, 1);
-  // 1 THÁNG
+
   let startMonth = get7AM(now.getFullYear(), now.getMonth(), 1);
   if (now < startMonth) {
     startMonth = get7AM(startMonth.getFullYear(), startMonth.getMonth() - 1, 1);
   }
   const endMonth = get7AM(startMonth.getFullYear(), startMonth.getMonth() + 1, 1);
-  // 1 NGÀY
+
   let startDay = get7AM(now.getFullYear(), now.getMonth(), now.getDate());
   if (now < startDay) {
     startDay = new Date(startDay.getTime() - 86400000);
   }
   const endDay = new Date(startDay.getTime() + 86400000);
   
-  // CHU KỲ CUỐN CHIẾU ĐA NGÀY THEO MỐC CHUẨN CỦA OKX
   const getRollingPeriodWithAnchor = (anchorY: number, anchorM: number, anchorD: number, days: number) => {
     const anchor = new Date(anchorY, anchorM, anchorD, 7, 0, 0).getTime();
     const periodMs = days * 86400000;
-    
     const cycles = Math.floor((now.getTime() - anchor) / periodMs);
     const start = new Date(anchor + cycles * periodMs);
     const end = new Date(start.getTime() + periodMs);
-    
     return { start, end };
   };
 
@@ -218,7 +231,6 @@ export default function Home() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={styles.candleTitle}>THÔNG TIN NẾN</div>
-                  {/* COMPONENT CHỌN COIN MỚI THÊM VÀO ĐÂY */}
                   <select 
                     value={coin} 
                     onChange={(e) => setCoin(e.target.value)}
@@ -279,7 +291,7 @@ export default function Home() {
   );
 }
 
-// ===== COMPONENT VẼ SÓNG (SPARKLINE) =====
+// ===== COMPONENT VẼ SÓNG =====
 function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPrice: number; currentPrice: number }) {
   if (!data || data.length === 0 || isNaN(openPrice)) return null;
   const chartData = [...data];
@@ -314,13 +326,13 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   );
 }
 
-// ===== COMPONENT RENDER MŨI TÊN (CSS THAY VÌ TEXT) =====
+// ===== COMPONENT RENDER MŨI TÊN =====
 function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionStyle: any }) {
   if (!types) return null;
-  const thickness = "4px";    // Độ dày của thân mũi tên
-  const length = "14px";      // Độ dài của thân mũi tên
-  const headWidth = "4px";    // Độ rộng rẽ sang 2 bên của tam giác đầu mũi tên
-  const headHeight = "7px";  // Chiều cao của tam giác đầu mũi tên
+  const thickness = "4px";    
+  const length = "14px";      
+  const headWidth = "4px";    
+  const headHeight = "7px";  
   return (
     <div style={positionStyle}>
       {types.map((type, i) => {
@@ -357,7 +369,7 @@ function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionS
   );
 }
 
-// ===== COMPONENT TIMELINE MỚI CẬP NHẬT =====
+// ===== COMPONENT TIMELINE ĐƯỢC CHỐNG LỖI RACE CONDITION =====
 function Timeline({ title, start, end, now, currentPrice, coin }: { title: string; start: Date; end: Date; now: Date; currentPrice: number; coin: string; }) {
   const [phaseData, setPhaseData] = useState({ 
     max: 0, maxTs: 0, 
@@ -365,6 +377,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
     open: 0, 
     phaseOpens: [0, 0, 0, 0]
   });
+  
   const [arrowStates, setArrowStates] = useState<{
     prev: string[] | null, 
     p1: string[] | null, 
@@ -377,8 +390,13 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
     prev: null, p1: null, p2: null, p3: null, p4: null, half1: null, half2: null
   });
 
-  // Lấy dữ liệu nến cho khung thời gian cụ thể để tìm Max/Min/Open và xét Mũi Tên
   useEffect(() => {
+    let ignore = false; // Cờ theo dõi khi đổi coin
+
+    // Clear sạch Timeline ngay khi đổi Coin để mũi tên coin cũ không dính vào
+    setPhaseData({ max: 0, maxTs: 0, min: Infinity, minTs: 0, open: 0, phaseOpens: [0, 0, 0, 0] });
+    setArrowStates({ prev: null, p1: null, p2: null, p3: null, p4: null, half1: null, half2: null });
+
     const fetchTimelineData = async () => {
       const durationMs = end.getTime() - start.getTime();
       const days = durationMs / 86400000;
@@ -395,9 +413,10 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
         const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${bar}&limit=300`, { cache: "no-store" });
         const json = await res.json();
         
+        if (ignore) return; // Nếu đã đổi coin rồi thì bỏ qua không update state
+
         if (json.data && json.data.length > 0) {
           const allData = json.data;
-          
           const targetTs = start.getTime();
           const validData = allData.filter((c: any) => parseInt(c[0]) >= targetTs);
           
@@ -477,9 +496,12 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
       }
     };
     fetchTimelineData();
-  }, [start, end, coin]); // Thêm coin để tự động render lại timeline
 
-  // ===== TÍNH TOÁN LOGIC MŨI TÊN DÀNH CHO TIÊU ĐỀ =====
+    return () => {
+      ignore = true; // cleanup báo hiệu đã đổi coin
+    };
+  }, [start, end, coin]); 
+
   const o = phaseData.open;
   const c = currentPrice;
   const h = Math.max(phaseData.max, isNaN(c) ? -Infinity : c);
@@ -524,7 +546,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
         <div style={{ ...styles.label, display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <span>{title} {o > 0 ? `- Mở cửa: ${o.toLocaleString()}` : ""}</span>
           
-          {headerArrows && (
+          {headerArrows && o > 0 && (
             <>
               <span style={{ color: "red", fontWeight: "bold" }}>-</span>
               <ArrowIcon types={headerArrows} positionStyle={{ display: 'flex', gap: '6px', alignItems: 'center' }} />
@@ -580,7 +602,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
                   {phaseIdx === 0 && <ArrowIcon types={arrowStates.half1} positionStyle={styles.halfArrowsWrapper} />}
                   {phaseIdx === 2 && <ArrowIcon types={arrowStates.half2} positionStyle={styles.halfArrowsWrapper} />}
                   
-                  {isMaxInPhase && (
+                  {isMaxInPhase && o > 0 && (
                     <>
                       <div style={{ ...styles.maxDot, left: `${maxRelative}%` }}></div>
                       <div style={{ ...styles.maxText, left: `${maxRelative}%` }}>MAX {phaseData.max.toLocaleString()}</div>
@@ -592,7 +614,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
                   
                   <ArrowIcon types={getPhaseArrows(phaseIdx)} positionStyle={styles.phaseArrowsWrapper} />
                   
-                  {isMinInPhase && (
+                  {isMinInPhase && o > 0 && (
                     <>
                       <div style={{ ...styles.minDot, left: `${minRelative}%` }}></div>
                       <div style={{ ...styles.minText, left: `${minRelative}%` }}>MIN {phaseData.min.toLocaleString()}</div>
@@ -621,7 +643,6 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
 
 // ===== PHẦN STYLE =====
 const styles: any = {
-  // === STYLE MỚI CHO DROP-DOWN LỰA CHỌN COIN ===
   coinSelect: {
     padding: "4px 10px",
     fontSize: "16px",
@@ -634,7 +655,6 @@ const styles: any = {
     outline: "none",
     boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
   },
-  
   introBox: {
     marginBottom: "15px",
     display: "flex",
@@ -739,95 +759,15 @@ const styles: any = {
   phaseText: { color: "#2563eb", fontWeight: "bold", fontSize: "12px", zIndex: 1, textAlign: "center", padding: "0 5px" },
   
   line: { position: "absolute", top: -5, bottom: -5, width: 2, background: "#ef4444", zIndex: 5, borderRadius: "2px" },
-  prevArrowsWrapper: {
-    position: "absolute",
-    left: "-19px", 
-    top: "50%",
-    transform: "translateY(-50%)",
-    display: "flex",
-    gap: "6px",
-    zIndex: 10
-  },
-  phaseArrowsWrapper: {
-    position: "absolute",
-    right: "10px", 
-    top: "50%",
-    transform: "translateY(-50%)",
-    display: "flex",
-    gap: "6px",
-    zIndex: 10
-  },
-  halfArrowsWrapper: {
-    position: "absolute",
-    right: "19px",
-    top: "-35px",
-    transform: "translateX(50%)", 
-    display: "flex",
-    gap: "6px",
-    zIndex: 10
-  },
-  tick: { 
-    position: "absolute", 
-    bottom: "100%", 
-    transform: "translate(-50%, -2px)", 
-    fontSize: "11.5px", 
-    fontWeight: "600",  
-    color: "#444",      
-    textAlign: "center", 
-    whiteSpace: "nowrap", 
-    display: "flex", 
-    flexDirection: "column", 
-    alignItems: "center", 
-    zIndex: 3 
-  },
+  prevArrowsWrapper: { position: "absolute", left: "-19px", top: "50%", transform: "translateY(-50%)", display: "flex", gap: "6px", zIndex: 10 },
+  phaseArrowsWrapper: { position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", display: "flex", gap: "6px", zIndex: 10 },
+  halfArrowsWrapper: { position: "absolute", right: "19px", top: "-35px", transform: "translateX(50%)", display: "flex", gap: "6px", zIndex: 10 },
+  tick: { position: "absolute", bottom: "100%", transform: "translate(-50%, -2px)", fontSize: "11.5px", fontWeight: "600", color: "#444", textAlign: "center", whiteSpace: "nowrap", display: "flex", flexDirection: "column", alignItems: "center", zIndex: 3 },
   dot: { width: "4px", height: "4px", background: "#777", borderRadius: "50%", marginTop: "4px" },
-  rangeTextContainer: { 
-    display: "flex", 
-    justifyContent: "space-between", 
-    fontSize: "11.5px", 
-    color: "#444", 
-    marginTop: "6px", 
-    fontWeight: "600" 
-  },
-  now: { 
-    position: "absolute", 
-    top: "100%", 
-    transform: "translate(-50%, 6px)", 
-    background: "#ef4444", 
-    color: "#fff", 
-    fontSize: "10px", 
-    padding: "3px 6px", 
-    borderRadius: "4px", 
-    zIndex: 6,
-    fontWeight: "bold",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-  },
-  maxDot: {
-    position: "absolute",
-    top: "-6px", 
-    transform: "translateX(-50%)",
-    width: "12px", height: "12px", background: "#22c55e", borderRadius: "50%", border: "2px solid #fff", zIndex: 10,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
-  },
-  maxText: {
-    position: "absolute",
-    bottom: "calc(100% + 45px)", 
-    transform: "translateX(-50%)",
-    color: "#16a34a", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10,
-    background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" 
-  },
-  minDot: {
-    position: "absolute",
-    bottom: "-6px",
-    transform: "translateX(-50%)",
-    width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%", border: "2px solid #fff", zIndex: 10,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
-  },
-  minText: {
-    position: "absolute",
-    top: "calc(100% + 25px)", 
-    transform: "translateX(-50%)",
-    color: "#dc2626", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10,
-    background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px"
-  },
+  rangeTextContainer: { display: "flex", justifyContent: "space-between", fontSize: "11.5px", color: "#444", marginTop: "6px", fontWeight: "600" },
+  now: { position: "absolute", top: "100%", transform: "translate(-50%, 6px)", background: "#ef4444", color: "#fff", fontSize: "10px", padding: "3px 6px", borderRadius: "4px", zIndex: 6, fontWeight: "bold", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" },
+  maxDot: { position: "absolute", top: "-6px", transform: "translateX(-50%)", width: "12px", height: "12px", background: "#22c55e", borderRadius: "50%", border: "2px solid #fff", zIndex: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" },
+  maxText: { position: "absolute", bottom: "calc(100% + 45px)", transform: "translateX(-50%)", color: "#16a34a", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10, background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" },
+  minDot: { position: "absolute", bottom: "-6px", transform: "translateX(-50%)", width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%", border: "2px solid #fff", zIndex: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" },
+  minText: { position: "absolute", top: "calc(100% + 25px)", transform: "translateX(-50%)", color: "#dc2626", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10, background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" },
 };
