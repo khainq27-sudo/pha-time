@@ -696,7 +696,7 @@ const styles: any = {
     alignItems: "center"
   },
   titleWrapper: { 
-    display: "flex", 
+    display: "flex",
     alignItems: "center", 
     justifyContent: "center", 
     gap: "15px", 
