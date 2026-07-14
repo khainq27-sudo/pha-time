@@ -9,9 +9,6 @@ export default function Home() {
   const [now, setNow] = useState<Date | null>(null); 
   const [chartData, setChartData] = useState<number[]>([]); 
   const [coin, setCoin] = useState("BTC");
-  
-  // [BẢN VÁ TỐI THƯỢNG] Bộ nhớ chung chứa nến 1D chuẩn để đồng bộ giá mở cửa cho mọi khung
-  const [dailyCandles, setDailyCandles] = useState<any[]>([]);
 
   // 1. Cập nhật đồng hồ
   useEffect(() => {
@@ -33,32 +30,6 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // 1.5. Fetch dữ liệu nến chuẩn 1D (300 ngày) để cấp cho các Timeline
-  useEffect(() => {
-    let ignore = false;
-    const fetchDaily = async () => {
-      try {
-        const res = await fetch(
-          `https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=1D&limit=300`,
-          { cache: "no-store" }
-        );
-        const json = await res.json();
-        if (!ignore && json.data) {
-          setDailyCandles(json.data);
-        }
-      } catch (error) {
-        console.error("Lỗi fetch daily candles:", error);
-      }
-    };
-    fetchDaily();
-    // Cập nhật lại mỗi 60s để nến chuẩn luôn tươi mới
-    const interval = setInterval(fetchDaily, 60000);
-    return () => {
-      ignore = true;
-      clearInterval(interval);
-    };
-  }, [coin]);
-
   // 2. Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m)
   useEffect(() => {
     let ignore = false; 
@@ -72,6 +43,7 @@ export default function Home() {
         const json = await res.json();
         
         if (ignore) return; 
+
         if (json.data) {
           const currentTime = new Date();
           const startDay = new Date(currentTime);
@@ -103,6 +75,7 @@ export default function Home() {
     let ws: WebSocket;
     let reconnectTimeout: NodeJS.Timeout;
     let ignore = false; 
+
     const connectWebSocket = () => {
       ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
       ws.onopen = () => {
@@ -120,7 +93,9 @@ export default function Home() {
         
         const data = JSON.parse(event.data);
         
+        // BẢO VỆ LỚP 3: Chỉ nhận data nếu đúng coin đang chọn
         if (data.arg && data.arg.instId !== `${coin}-USDT`) return;
+
         if (data.data && data.data.length > 0) {
           const ticker = data.data[0];
           
@@ -152,10 +127,11 @@ export default function Home() {
     };
   }, [coin]); 
 
-  // Xử lý đổi Coin đồng bộ
+  // Xử lý đổi Coin đồng bộ (BẢO VỆ LỚP 1)
   const handleCoinChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newCoin = e.target.value;
     setCoin(newCoin);
+    // Xoá sạch data ngay lập tức để tránh render nhầm dữ liệu cũ
     setPrice("");
     setOpenPrice("");
     setPrevPrice("");
@@ -297,6 +273,7 @@ export default function Home() {
             </div>
           </div>
           <div style={styles.chartSide}>
+            {/* Sử dụng KEY để huỷ component khi đổi coin */}
             <WaveChart key={`wave-${coin}`} data={chartData} openPrice={parseFloat(openPrice)} currentPrice={parseFloat(price)} />
           </div>
         </div>
@@ -311,16 +288,16 @@ export default function Home() {
         <div style={styles.timeFrameTitle}>KHUNG THỜI GIAN</div>
       </div>
 
-      {/* Truyền dailyCandles xuống tất cả các Timeline để đối chiếu */}
-      <Timeline key={`${coin}-year`} title="Năm" start={startYear} end={endYear} now={now} currentPrice={parseFloat(price)} coin={coin} dailyCandles={dailyCandles} />
-      <Timeline key={`${coin}-6m`} title="6 Tháng" start={startHalf} end={endHalf} now={now} currentPrice={parseFloat(price)} coin={coin} dailyCandles={dailyCandles} />
-      <Timeline key={`${coin}-3m`} title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} currentPrice={parseFloat(price)} coin={coin} dailyCandles={dailyCandles} />
-      <Timeline key={`${coin}-1m`} title="1 Tháng" start={startMonth} end={endMonth} now={now} currentPrice={parseFloat(price)} coin={coin} dailyCandles={dailyCandles} />
-      <Timeline key={`${coin}-7d`} title="Tuần" start={d7.start} end={d7.end} now={now} currentPrice={parseFloat(price)} coin={coin} dailyCandles={dailyCandles} />
-      <Timeline key={`${coin}-5d`} title="5 Ngày" start={d5.start} end={d5.end} now={now} currentPrice={parseFloat(price)} coin={coin} dailyCandles={dailyCandles} />
-      <Timeline key={`${coin}-3d`} title="3 Ngày" start={d3.start} end={d3.end} now={now} currentPrice={parseFloat(price)} coin={coin} dailyCandles={dailyCandles} />
-      <Timeline key={`${coin}-2d`} title="2 Ngày" start={d2.start} end={d2.end} now={now} currentPrice={parseFloat(price)} coin={coin} dailyCandles={dailyCandles} />
-      <Timeline key={`${coin}-1d`} title="1 Ngày" start={startDay} end={endDay} now={now} currentPrice={parseFloat(price)} coin={coin} dailyCandles={dailyCandles} />
+      {/* BẢO VỆ LỚP 2: Dùng key={coin + ...} để đập đi xây lại Timeline */}
+      <Timeline key={`${coin}-year`} title="Năm" start={startYear} end={endYear} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-6m`} title="6 Tháng" start={startHalf} end={endHalf} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-3m`} title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-1m`} title="1 Tháng" start={startMonth} end={endMonth} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-7d`} title="Tuần" start={d7.start} end={d7.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-5d`} title="5 Ngày" start={d5.start} end={d5.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-3d`} title="3 Ngày" start={d3.start} end={d3.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-2d`} title="2 Ngày" start={d2.start} end={d2.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-1d`} title="1 Ngày" start={startDay} end={endDay} now={now} currentPrice={parseFloat(price)} coin={coin} />
     </div>
   );
 }
@@ -346,6 +323,7 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   const getY = (val: number) => height - ((val - min) / (max - min)) * height;
   const pathD = `M ${chartData.map((d, i) => `${getX(i)},${getY(d)}`).join(" L ")}`;
   const openY = getY(openPrice);
+
   return (
     <div style={{ width: "100%", height: "100px", position: "relative" }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
@@ -403,7 +381,7 @@ function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionS
 }
 
 // ===== COMPONENT TIMELINE =====
-function Timeline({ title, start, end, now, currentPrice, coin, dailyCandles }: { title: string; start: Date; end: Date; now: Date; currentPrice: number; coin: string; dailyCandles: any[] }) {
+function Timeline({ title, start, end, now, currentPrice, coin }: { title: string; start: Date; end: Date; now: Date; currentPrice: number; coin: string; }) {
   const [phaseData, setPhaseData] = useState({ 
     max: 0, maxTs: 0, 
     min: Infinity, minTs: 0, 
@@ -423,9 +401,9 @@ function Timeline({ title, start, end, now, currentPrice, coin, dailyCandles }: 
     prev: null, p1: null, p2: null, p3: null, p4: null, half1: null, half2: null
   });
 
-  // Tái kích hoạt tự động lấy dữ liệu khi dailyCandles thay đổi (tạo độ "live" cho các nến trong pha)
   useEffect(() => {
     let ignore = false; 
+
     const fetchTimelineData = async () => {
       const durationMs = end.getTime() - start.getTime();
       const days = durationMs / 86400000;
@@ -443,6 +421,7 @@ function Timeline({ title, start, end, now, currentPrice, coin, dailyCandles }: 
         const json = await res.json();
         
         if (ignore) return; 
+
         if (json.data && json.data.length > 0) {
           const allData = json.data;
           const targetTs = start.getTime();
@@ -450,31 +429,7 @@ function Timeline({ title, start, end, now, currentPrice, coin, dailyCandles }: 
           
           if (validData.length > 0) {
             validData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0]));
-            
-            // Giá gốc tạm thời
-            let open = parseFloat(validData[0][1]);
-            
-            // --- BẢN VÁ TỐI THƯỢNG: TÌM GIÁ MỞ CỬA TUYỆT ĐỐI ---
-            // Thay vì dùng nến 3D/6H có thể bị nhảy ngày, ta so khớp với bộ dailyCandles 1D chuẩn.
-            if (dailyCandles && dailyCandles.length > 0) {
-              let closestCandle = null;
-              let minDiff = Infinity;
-              
-              dailyCandles.forEach((c: any) => {
-                const diff = Math.abs(parseInt(c[0]) - targetTs);
-                if (diff < minDiff) {
-                  minDiff = diff;
-                  closestCandle = c;
-                }
-              });
-              
-              // Chấp nhận độ lệch múi giờ tối đa 24h, sẽ bốc chính xác cây nến của ngày đó
-              if (closestCandle && minDiff <= 86400000) {
-                open = parseFloat(closestCandle[1]);
-              }
-            }
-            // -----------------------------------------------------
-
+            const open = parseFloat(validData[0][1]);
             let max = -Infinity;
             let maxTs = 0;
             let min = Infinity;
@@ -492,83 +447,67 @@ function Timeline({ title, start, end, now, currentPrice, coin, dailyCandles }: 
             const pStep = durationMs / 16;
             for (let i = 0; i < 4; i++) {
               const pStartTs = start.getTime() + pStep * (i * 4);
-              if (i === 0) {
-                // Ép pha 1/4 đầu nhận giá chuẩn
-                phaseOpens[i] = open;
-              } else {
-                const pCandle = validData.find((c: any) => parseInt(c[0]) >= pStartTs);
-                if (pCandle) {
-                  phaseOpens[i] = parseFloat(pCandle[1]);
-                }
+              const pCandle = validData.find((c: any) => parseInt(c[0]) >= pStartTs);
+              if (pCandle) {
+                phaseOpens[i] = parseFloat(pCandle[1]);
               }
             }
             setPhaseData({ max, maxTs, min, minTs, open, phaseOpens });
-
-            // Hàm tính mũi tên được cập nhật để ghi nhận giá mở cửa chuẩn cho những pha dính lứu
-            const getStats = (pStart: number, pEnd: number, isPhase1: boolean = false) => {
-              const pData = allData.filter((c: any) => {
-                 const ts = parseInt(c[0]);
-                 return ts >= pStart && ts < pEnd;
-              });
-              if (pData.length === 0) return null;
-              pData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0]));
-              
-              let o = parseFloat(pData[0][1]);
-              // Ghi đè giá mở cửa chuẩn nếu đây là khu vực liên kết với lúc start
-              if (isPhase1 && open > 0) {
-                o = open;
-              }
-
-              const c = parseFloat(pData[pData.length - 1][4]); 
-              let h = -Infinity;
-              let l = Infinity;
-              pData.forEach((cd: any) => {
-                 const high = parseFloat(cd[2]);
-                 const low = parseFloat(cd[3]);
-                 if (high > h) h = high;
-                 if (low < l) l = low;
-              });
-              
-              // Đảm bảo râu nến (Max/Min) vẫn ôm trọn giá mở cửa
-              if (o > h) h = o;
-              if (o < l) l = o;
-
-              return { open: o, close: c, high: h, low: l };
-            };
-
-            const calcArr = (stats: any) => {
-              if (!stats) return null;
-              const { open: stOpen, close: stClose, high: stHigh, low: stLow } = stats;
-              if (stClose >= stOpen) { 
-                const threshold = stOpen + (stHigh - stOpen) * 0.5;
-                return stClose >= threshold ? ['UP', 'UP'] : ['DOWN', 'UP'];
-              } else { 
-                const threshold = stOpen - (stOpen - stLow) * 0.5;
-                return stClose <= threshold ? ['DOWN', 'DOWN'] : ['UP', 'DOWN'];
-              }
-            };
-
-            setArrowStates({
-              prev: calcArr(getStats(start.getTime() - durationMs, start.getTime())),
-              p1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 4, true)), // Ép nhận giá mở cửa chuẩn
-              p2: calcArr(getStats(start.getTime() + pStep * 4, start.getTime() + pStep * 8)),
-              p3: calcArr(getStats(start.getTime() + pStep * 8, start.getTime() + pStep * 12)),
-              p4: calcArr(getStats(start.getTime() + pStep * 12, end.getTime())),
-              half1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 8, true)), // Ép nhận giá mở cửa chuẩn
-              half2: calcArr(getStats(start.getTime() + pStep * 8, end.getTime())),
-            });
           }
+
+          const getStats = (pStart: number, pEnd: number) => {
+            const pData = allData.filter((c: any) => {
+               const ts = parseInt(c[0]);
+               return ts >= pStart && ts < pEnd;
+            });
+            if (pData.length === 0) return null;
+            pData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0]));
+            const o = parseFloat(pData[0][1]);
+            const c = parseFloat(pData[pData.length - 1][4]); 
+            let h = -Infinity;
+            let l = Infinity;
+            pData.forEach((cd: any) => {
+               const high = parseFloat(cd[2]);
+               const low = parseFloat(cd[3]);
+               if (high > h) h = high;
+               if (low < l) l = low;
+            });
+            return { open: o, close: c, high: h, low: l };
+          };
+
+          const calcArr = (stats: any) => {
+            if (!stats) return null;
+            const { open, close, high, low } = stats;
+            if (close >= open) { 
+              const threshold = open + (high - open) * 0.5;
+              return close >= threshold ? ['UP', 'UP'] : ['DOWN', 'UP'];
+            } else { 
+              const threshold = open - (open - low) * 0.5;
+              return close <= threshold ? ['DOWN', 'DOWN'] : ['UP', 'DOWN'];
+            }
+          };
+
+          const pStep = durationMs / 16;
+          setArrowStates({
+            prev: calcArr(getStats(start.getTime() - durationMs, start.getTime())),
+            p1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 4)),
+            p2: calcArr(getStats(start.getTime() + pStep * 4, start.getTime() + pStep * 8)),
+            p3: calcArr(getStats(start.getTime() + pStep * 8, start.getTime() + pStep * 12)),
+            p4: calcArr(getStats(start.getTime() + pStep * 12, end.getTime())),
+            half1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 8)),
+            half2: calcArr(getStats(start.getTime() + pStep * 8, end.getTime())),
+          });
         }
       } catch (error) {
         console.error("Lỗi fetch timeline data:", error);
       }
     };
-    
     fetchTimelineData();
+
     return () => {
       ignore = true; 
     };
-  }, [start, end, coin, dailyCandles]); // Re-render và bốc giá chuẩn ngay khi dailyCandles được tải về
+  }, [start, end, coin]); 
 
   const o = phaseData.open;
   const c = currentPrice;
@@ -587,6 +526,7 @@ function Timeline({ title, start, end, now, currentPrice, coin, dailyCandles }: 
       headerArrows = c <= threshold ? ['DOWN', 'DOWN'] : ['UP', 'DOWN'];
     }
   }
+
   let progress = ((now.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100;
   progress = Math.max(0, Math.min(100, progress)); 
   
@@ -838,3 +778,4 @@ const styles: any = {
   minDot: { position: "absolute", bottom: "-6px", transform: "translateX(-50%)", width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%", border: "2px solid #fff", zIndex: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" },
   minText: { position: "absolute", top: "calc(100% + 25px)", transform: "translateX(-50%)", color: "#dc2626", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10, background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" },
 };
+
