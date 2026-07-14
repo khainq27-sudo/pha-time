@@ -32,9 +32,8 @@ export default function Home() {
 
   // 2. Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m)
   useEffect(() => {
-    let ignore = false; // Ngăn chặn Race Condition
-    setChartData([]); // Xoá sóng cũ ngay lập tức khi đổi coin
-
+    let ignore = false; 
+    
     const fetchChartData = async () => {
       try {
         const res = await fetch(
@@ -43,7 +42,7 @@ export default function Home() {
         );
         const json = await res.json();
         
-        if (ignore) return; // Nếu đã chuyển sang coin khác, bỏ qua dữ liệu cũ
+        if (ignore) return; 
 
         if (json.data) {
           const currentTime = new Date();
@@ -66,7 +65,7 @@ export default function Home() {
     const interval = setInterval(fetchChartData, 60000);
     
     return () => {
-      ignore = true; // Hủy cập nhật state nếu component unmount hoặc đổi coin
+      ignore = true; 
       clearInterval(interval);
     };
   }, [coin]);
@@ -75,12 +74,7 @@ export default function Home() {
   useEffect(() => {
     let ws: WebSocket;
     let reconnectTimeout: NodeJS.Timeout;
-    let ignore = false; // Chặn cập nhật giá từ websocket cũ
-
-    // Clear giá trị hiển thị lập tức khi đổi Coin
-    setPrice("");
-    setPrevPrice("");
-    setOpenPrice("");
+    let ignore = false; 
 
     const connectWebSocket = () => {
       ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
@@ -95,9 +89,13 @@ export default function Home() {
       };
       
       ws.onmessage = (event) => {
-        if (ignore) return; // Bỏ qua message nếu đã chuyển coin
+        if (ignore) return; 
         
         const data = JSON.parse(event.data);
+        
+        // BẢO VỆ LỚP 3: Chỉ nhận data nếu đúng coin đang chọn
+        if (data.arg && data.arg.instId !== `${coin}-USDT`) return;
+
         if (data.data && data.data.length > 0) {
           const ticker = data.data[0];
           
@@ -128,6 +126,17 @@ export default function Home() {
       if (ws) ws.close();
     };
   }, [coin]); 
+
+  // Xử lý đổi Coin đồng bộ (BẢO VỆ LỚP 1)
+  const handleCoinChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCoin = e.target.value;
+    setCoin(newCoin);
+    // Xoá sạch data ngay lập tức để tránh render nhầm dữ liệu cũ
+    setPrice("");
+    setOpenPrice("");
+    setPrevPrice("");
+    setChartData([]);
+  };
 
   if (!now) return null;
 
@@ -233,7 +242,7 @@ export default function Home() {
                   <div style={styles.candleTitle}>THÔNG TIN NẾN</div>
                   <select 
                     value={coin} 
-                    onChange={(e) => setCoin(e.target.value)}
+                    onChange={handleCoinChange}
                     style={styles.coinSelect}
                   >
                     <option value="BTC">BTC</option>
@@ -264,7 +273,8 @@ export default function Home() {
             </div>
           </div>
           <div style={styles.chartSide}>
-            <WaveChart data={chartData} openPrice={parseFloat(openPrice)} currentPrice={parseFloat(price)} />
+            {/* Sử dụng KEY để huỷ component khi đổi coin */}
+            <WaveChart key={`wave-${coin}`} data={chartData} openPrice={parseFloat(openPrice)} currentPrice={parseFloat(price)} />
           </div>
         </div>
       </div>
@@ -278,15 +288,16 @@ export default function Home() {
         <div style={styles.timeFrameTitle}>KHUNG THỜI GIAN</div>
       </div>
 
-      <Timeline title="Năm" start={startYear} end={endYear} now={now} currentPrice={parseFloat(price)} coin={coin} />
-      <Timeline title="6 Tháng" start={startHalf} end={endHalf} now={now} currentPrice={parseFloat(price)} coin={coin} />
-      <Timeline title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} currentPrice={parseFloat(price)} coin={coin} />
-      <Timeline title="1 Tháng" start={startMonth} end={endMonth} now={now} currentPrice={parseFloat(price)} coin={coin} />
-      <Timeline title="Tuần" start={d7.start} end={d7.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
-      <Timeline title="5 Ngày" start={d5.start} end={d5.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
-      <Timeline title="3 Ngày" start={d3.start} end={d3.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
-      <Timeline title="2 Ngày" start={d2.start} end={d2.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
-      <Timeline title="1 Ngày" start={startDay} end={endDay} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      {/* BẢO VỆ LỚP 2: Dùng key={coin + ...} để đập đi xây lại Timeline */}
+      <Timeline key={`${coin}-year`} title="Năm" start={startYear} end={endYear} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-6m`} title="6 Tháng" start={startHalf} end={endHalf} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-3m`} title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-1m`} title="1 Tháng" start={startMonth} end={endMonth} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-7d`} title="Tuần" start={d7.start} end={d7.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-5d`} title="5 Ngày" start={d5.start} end={d5.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-3d`} title="3 Ngày" start={d3.start} end={d3.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-2d`} title="2 Ngày" start={d2.start} end={d2.end} now={now} currentPrice={parseFloat(price)} coin={coin} />
+      <Timeline key={`${coin}-1d`} title="1 Ngày" start={startDay} end={endDay} now={now} currentPrice={parseFloat(price)} coin={coin} />
     </div>
   );
 }
@@ -369,7 +380,7 @@ function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionS
   );
 }
 
-// ===== COMPONENT TIMELINE ĐƯỢC CHỐNG LỖI RACE CONDITION =====
+// ===== COMPONENT TIMELINE =====
 function Timeline({ title, start, end, now, currentPrice, coin }: { title: string; start: Date; end: Date; now: Date; currentPrice: number; coin: string; }) {
   const [phaseData, setPhaseData] = useState({ 
     max: 0, maxTs: 0, 
@@ -391,11 +402,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
   });
 
   useEffect(() => {
-    let ignore = false; // Cờ theo dõi khi đổi coin
-
-    // Clear sạch Timeline ngay khi đổi Coin để mũi tên coin cũ không dính vào
-    setPhaseData({ max: 0, maxTs: 0, min: Infinity, minTs: 0, open: 0, phaseOpens: [0, 0, 0, 0] });
-    setArrowStates({ prev: null, p1: null, p2: null, p3: null, p4: null, half1: null, half2: null });
+    let ignore = false; 
 
     const fetchTimelineData = async () => {
       const durationMs = end.getTime() - start.getTime();
@@ -413,7 +420,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
         const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${bar}&limit=300`, { cache: "no-store" });
         const json = await res.json();
         
-        if (ignore) return; // Nếu đã đổi coin rồi thì bỏ qua không update state
+        if (ignore) return; 
 
         if (json.data && json.data.length > 0) {
           const allData = json.data;
@@ -498,7 +505,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
     fetchTimelineData();
 
     return () => {
-      ignore = true; // cleanup báo hiệu đã đổi coin
+      ignore = true; 
     };
   }, [start, end, coin]); 
 
