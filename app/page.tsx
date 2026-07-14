@@ -40,23 +40,19 @@ export default function Home() {
         const json = await res.json();
         if (json.data) {
           const currentTime = new Date();
-          const startDay = new Date(currentTime);
-          startDay.setHours(7, 0, 0, 0);
-          if (currentTime < startDay) startDay.setDate(startDay.getDate() - 1);
+          // Đồng bộ mốc 7h sáng theo giờ VN (00:00 UTC)
+          const startDay = new Date(Date.UTC(currentTime.getUTCFullYear(), currentTime.getUTCMonth(), currentTime.getUTCDate(), 0, 0, 0));
           const targetTs = startDay.getTime();
-
           const validData = json.data
             .filter((candle: any[]) => parseInt(candle[0]) >= targetTs)
             .map((candle: any[]) => parseFloat(candle[4]))
             .reverse();
-
           setChartData(validData);
         }
       } catch (error) {
         console.error("Lỗi fetch dữ liệu sóng:", error);
       }
     };
-
     fetchChartData();
     const interval = setInterval(fetchChartData, 60000);
     return () => clearInterval(interval);
@@ -66,10 +62,8 @@ export default function Home() {
   useEffect(() => {
     let ws: WebSocket;
     let reconnectTimeout: NodeJS.Timeout;
-
     const connectWebSocket = () => {
       ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
-
       ws.onopen = () => {
         ws.send(
           JSON.stringify({
@@ -78,7 +72,6 @@ export default function Home() {
           })
         );
       };
-
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.data && data.data.length > 0) {
@@ -90,20 +83,16 @@ export default function Home() {
             }
             return ticker.last;
           });
-
           if (ticker.sodUtc0) {
             setOpenPrice(ticker.sodUtc0);
           }
         }
       };
-
       ws.onclose = () => {
         reconnectTimeout = setTimeout(connectWebSocket, 3000);
       };
     };
-
     connectWebSocket();
-
     return () => {
       clearTimeout(reconnectTimeout);
       if (ws) ws.close();
@@ -112,12 +101,11 @@ export default function Home() {
 
   if (!now) return null;
 
-  // ===== TÍNH TOÁN % TĂNG GIẢM =====
+  // ===== TÍNH TOÁN % TĂNG GIẢM TỔNG QUAN =====
   const p = parseFloat(price);
   const op = parseFloat(openPrice);
   let diffStr = "";
   let isUp = true;
-
   if (!isNaN(p) && !isNaN(op) && op !== 0) {
     const diff = p - op;
     isUp = diff >= 0;
@@ -126,52 +114,12 @@ export default function Home() {
     diffStr = `${sign}${pct}% (${sign}${diff.toFixed(1)} USDT)`;
   }
 
-  // ===== HÀM HỖ TRỢ LẤY ĐÚNG 7H SÁNG =====
-  const get7AM = (y: number, m: number, d: number) => new Date(y, m, d, 7, 0, 0);
-
-  // ===== TÍNH TOÁN CÁC BIẾN THỜI GIAN =====
-  const y = now.getFullYear();
-
-  // NĂM
-  let startYear = get7AM(y, 0, 1);
-  if (now < startYear) startYear = get7AM(y - 1, 0, 1);
-  const endYear = get7AM(startYear.getFullYear() + 1, 0, 1);
-
-  // 6 THÁNG
-  let hMonth = now.getMonth() >= 6 ? 6 : 0;
-  let startHalf = get7AM(startYear.getFullYear(), hMonth, 1);
-  if (now < startHalf) {
-    hMonth = hMonth === 0 ? 6 : 0;
-    const yHalf = hMonth === 6 ? startYear.getFullYear() - 1 : startYear.getFullYear();
-    startHalf = get7AM(yHalf, hMonth, 1);
-  }
-  const endHalf = get7AM(startHalf.getFullYear(), startHalf.getMonth() + 6, 1);
-
-  // 3 THÁNG (QUÝ)
-  let qMonth = Math.floor(now.getMonth() / 3) * 3;
-  let quarterStart = get7AM(now.getFullYear(), qMonth, 1);
-  if (now < quarterStart) {
-    quarterStart = get7AM(quarterStart.getFullYear(), quarterStart.getMonth() - 3, 1);
-  }
-  const quarterEnd = get7AM(quarterStart.getFullYear(), quarterStart.getMonth() + 3, 1);
-
-  // 1 THÁNG
-  let startMonth = get7AM(now.getFullYear(), now.getMonth(), 1);
-  if (now < startMonth) {
-    startMonth = get7AM(startMonth.getFullYear(), startMonth.getMonth() - 1, 1);
-  }
-  const endMonth = get7AM(startMonth.getFullYear(), startMonth.getMonth() + 1, 1);
-
-  // 1 NGÀY
-  let startDay = get7AM(now.getFullYear(), now.getMonth(), now.getDate());
-  if (now < startDay) {
-    startDay = new Date(startDay.getTime() - 86400000);
-  }
-  const endDay = new Date(startDay.getTime() + 86400000);
+  // ===== HÀM HỖ TRỢ LẤY ĐÚNG 7H SÁNG VIỆT NAM (00:00 UTC) =====
+  const get7AM = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d, 0, 0, 0));
 
   // CHU KỲ CUỐN CHIẾU ĐA NGÀY THEO MỐC CHUẨN CỦA OKX
   const getRollingPeriodWithAnchor = (anchorY: number, anchorM: number, anchorD: number, days: number) => {
-    const anchor = new Date(anchorY, anchorM, anchorD, 7, 0, 0).getTime();
+    const anchor = new Date(Date.UTC(anchorY, anchorM, anchorD, 0, 0, 0)).getTime();
     const periodMs = days * 86400000;
     
     const cycles = Math.floor((now.getTime() - anchor) / periodMs);
@@ -180,6 +128,49 @@ export default function Home() {
     
     return { start, end };
   };
+
+  // Tính toán thời gian thực tế theo múi giờ Việt Nam (UTC+7) để chia khung thời gian chính xác
+  const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const y = vnTime.getUTCFullYear();
+  const m = vnTime.getUTCMonth();
+  const d = vnTime.getUTCDate();
+
+  // NĂM
+  let startYear = get7AM(y, 0, 1);
+  if (now < startYear) startYear = get7AM(y - 1, 0, 1);
+  const endYear = get7AM(startYear.getUTCFullYear() + 1, 0, 1);
+
+  // 6 THÁNG
+  let hMonth = m >= 6 ? 6 : 0;
+  let startHalf = get7AM(startYear.getUTCFullYear(), hMonth, 1);
+  if (now < startHalf) {
+    hMonth = hMonth === 0 ? 6 : 0;
+    const yHalf = hMonth === 6 ? startYear.getUTCFullYear() - 1 : startYear.getUTCFullYear();
+    startHalf = get7AM(yHalf, hMonth, 1);
+  }
+  const endHalf = get7AM(startHalf.getUTCFullYear(), startHalf.getUTCMonth() + 6, 1);
+
+  // 3 THÁNG (QUÝ)
+  let qMonth = Math.floor(m / 3) * 3;
+  let quarterStart = get7AM(y, qMonth, 1);
+  if (now < quarterStart) {
+    quarterStart = get7AM(quarterStart.getUTCFullYear(), quarterStart.getUTCMonth() - 3, 1);
+  }
+  const quarterEnd = get7AM(quarterStart.getUTCFullYear(), quarterStart.getUTCMonth() + 3, 1);
+
+  // 1 THÁNG
+  let startMonth = get7AM(y, m, 1);
+  if (now < startMonth) {
+    startMonth = get7AM(startMonth.getUTCFullYear(), startMonth.getUTCMonth() - 1, 1);
+  }
+  const endMonth = get7AM(startMonth.getUTCFullYear(), startMonth.getUTCMonth() + 1, 1);
+
+  // 1 NGÀY
+  let startDay = get7AM(y, m, d);
+  if (now < startDay) {
+    startDay = new Date(startDay.getTime() - 86400000);
+  }
+  const endDay = new Date(startDay.getTime() + 86400000);
 
   const d2 = getRollingPeriodWithAnchor(2026, 3, 25, 2);
   const d3 = getRollingPeriodWithAnchor(2026, 3, 25, 3);
@@ -197,7 +188,6 @@ export default function Home() {
         </div>
         <p style={styles.time}>Thời gian hiện tại: {time}</p>
       </div>
-
       <div style={styles.topCardWrapper}>
         <div style={styles.introBox}>
           <div style={styles.simpleText}>Telegram: @snakekay</div>
@@ -224,7 +214,7 @@ export default function Home() {
                 <div
                   style={{
                     ...styles.price,
-                    color: price > prevPrice ? "#22c55e" : price < prevPrice ? "#ef4444" : "#111",
+                    color: parseFloat(price) > parseFloat(prevPrice) ? "#22c55e" : parseFloat(price) < parseFloat(prevPrice) ? "#ef4444" : "#111",
                   }}
                 >
                   {price ? parseFloat(price).toLocaleString() : "..."} USDT
@@ -242,13 +232,11 @@ export default function Home() {
               </div>
             </div>
           </div>
-
           <div style={styles.chartSide}>
             <WaveChart data={chartData} openPrice={parseFloat(openPrice)} currentPrice={parseFloat(price)} />
           </div>
         </div>
       </div>
-
       <div style={styles.timeFrameBox}>
         <div style={styles.clockIcon}>
           <div style={styles.clockCircle}></div>
@@ -257,7 +245,6 @@ export default function Home() {
         </div>
         <div style={styles.timeFrameTitle}>KHUNG THỜI GIAN</div>
       </div>
-
       <Timeline title="Năm" start={startYear} end={endYear} now={now} currentPrice={parseFloat(price)} />
       <Timeline title="6 Tháng" start={startHalf} end={endHalf} now={now} currentPrice={parseFloat(price)} />
       <Timeline title="3 Tháng" start={quarterStart} end={quarterEnd} now={now} currentPrice={parseFloat(price)} />
@@ -274,10 +261,8 @@ export default function Home() {
 // ===== COMPONENT VẼ SÓNG (SPARKLINE) =====
 function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPrice: number; currentPrice: number }) {
   if (!data || data.length === 0 || isNaN(openPrice)) return null;
-
   const chartData = [...data];
   if (!isNaN(currentPrice)) chartData[chartData.length - 1] = currentPrice;
-
   const minData = Math.min(...chartData, openPrice);
   const maxData = Math.max(...chartData, openPrice);
   
@@ -285,19 +270,15 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   const padding = range * 0.2; 
   const min = minData - padding;
   const max = maxData + padding;
-
   const isGreen = currentPrice >= openPrice;
   const color = isGreen ? "#22c55e" : "#ef4444"; 
-
   const width = 800; 
   const height = 150;
   
   const getX = (index: number) => (index / (chartData.length - 1)) * width;
   const getY = (val: number) => height - ((val - min) / (max - min)) * height;
-
   const pathD = `M ${chartData.map((d, i) => `${getX(i)},${getY(d)}`).join(" L ")}`;
   const openY = getY(openPrice);
-
   return (
     <div style={{ width: "100%", height: "100px", position: "relative" }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
@@ -311,26 +292,18 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   );
 }
 
-// ===== COMPONENT RENDER MŨI TÊN (CSS THAY VÌ TEXT) =====
+// ===== COMPONENT RENDER MŨI TÊN =====
 function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionStyle: any }) {
   if (!types) return null;
-
-  // =========================================================
-  // TÙY CHỈNH KÍCH THƯỚC MŨI TÊN TẠI ĐÂY 
-  // Bạn có thể chỉnh các con số này để thay đổi độ dày / dài
-  // =========================================================
-  const thickness = "4px";    // Độ dày của thân mũi tên
-  const length = "14px";      // Độ dài của thân mũi tên
-  const headWidth = "4px";    // Độ rộng rẽ sang 2 bên của tam giác đầu mũi tên
-  const headHeight = "7px";  // Chiều cao của tam giác đầu mũi tên
-  // =========================================================
-
+  const thickness = "4px";    
+  const length = "14px";      
+  const headWidth = "4px";    
+  const headHeight = "7px";  
   return (
     <div style={positionStyle}>
       {types.map((type, i) => {
         const isUp = type === 'UP';
         const color = isUp ? '#22c55e' : '#ef4444';
-        
         return (
           <div key={i} style={{
             width: thickness,
@@ -338,7 +311,6 @@ function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionS
             backgroundColor: color,
             position: "relative",
           }}>
-            {/* Tạo đầu mũi tên bằng thủ thuật CSS border */}
             <div style={{
               position: "absolute",
               left: "50%",
@@ -362,7 +334,7 @@ function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionS
   );
 }
 
-// ===== COMPONENT TIMELINE MỚI CẬP NHẬT =====
+// ===== COMPONENT TIMELINE ĐÃ ĐƯỢC SỬA GIÁ MỞ CỬA CHÍNH XÁC KHUNG LỚN =====
 function Timeline({ title, start, end, now, currentPrice }: { title: string; start: Date; end: Date; now: Date; currentPrice: number; }) {
   const [phaseData, setPhaseData] = useState({ 
     max: 0, maxTs: 0, 
@@ -370,7 +342,6 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
     open: 0, 
     phaseOpens: [0, 0, 0, 0]
   });
-
   const [arrowStates, setArrowStates] = useState<{
     prev: string[] | null, 
     p1: string[] | null, 
@@ -383,15 +354,13 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
     prev: null, p1: null, p2: null, p3: null, p4: null, half1: null, half2: null
   });
 
-  // Lấy dữ liệu nến cho khung thời gian cụ thể để tìm Max/Min/Open và xét Mũi Tên
   useEffect(() => {
     const fetchTimelineData = async () => {
       const durationMs = end.getTime() - start.getTime();
       const days = durationMs / 86400000;
       let bar = "15m";
       
-      // Auto scale candle bar. Tăng lịch sử fetch lên x2 để lấy được cả chu kỳ trước (prevPeriod)
-      if (days > 150) bar = "3D"; // Đủ fetch 900 ngày (300 nến 3D) -> Lấy cả năm trước
+      if (days > 150) bar = "3D"; 
       else if (days > 60) bar = "1D";
       else if (days > 14) bar = "6H";
       else if (days > 5) bar = "2H";
@@ -399,48 +368,75 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
       else bar = "15m";
 
       try {
+        // 1. Fetch dữ liệu chính để phục vụ vẽ sóng, đỉnh, đáy như cũ
         const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=${bar}&limit=300`, { cache: "no-store" });
         const json = await res.json();
         
+        // 2. GIẢI PHÁP SỬA LỖI: Fetch giá mở cửa chuẩn 7h00 sáng (00:00 UTC) từ API nến 1D lịch sử chuyên biệt
+        let accurateOpen = 0;
+        if (["Năm", "6 Tháng", "3 Tháng", "1 Tháng"].includes(title)) {
+          try {
+            // Gọi API history-candles để lấy nến ngày 1D lùi về quanh thời điểm start
+            const openRes = await fetch(
+              `https://www.okx.com/api/v5/market/history-candles?instId=BTC-USDT&bar=1D&after=${start.getTime() + 3 * 86400000}&limit=10`,
+              { cache: "no-store" }
+            );
+            const openJson = await openRes.json();
+            if (openJson.data && openJson.data.length > 0) {
+              // Tìm chính xác cây nến ngày trùng khớp mili-giây với điểm khởi đầu chu kỳ
+              const exactCandle = openJson.data.find((c: any) => parseInt(c[0]) === start.getTime());
+              if (exactCandle) {
+                accurateOpen = parseFloat(exactCandle[1]); // Lấy giá Open của ngày đó
+              }
+            }
+          } catch (openErr) {
+            console.error(`Lỗi fetch giá mở cửa chuẩn cho khung ${title}:`, openErr);
+          }
+        }
+        
         if (json.data && json.data.length > 0) {
           const allData = json.data;
-          
-          // ===== TÍNH TOÁN DATA CỦA CHU KỲ HIỆN TẠI (ĐỂ VẼ MAX/MIN) =====
           const targetTs = start.getTime();
           const validData = allData.filter((c: any) => parseInt(c[0]) >= targetTs);
+          
+          validData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0])); 
+          
+          // Gán giá mở cửa: Ưu tiên giá chính xác vừa fetch được, nếu không có mới fallback về phương án cũ
+          let open = validData.length > 0 ? parseFloat(validData[0][1]) : 0;
+          if (accurateOpen > 0) {
+            open = accurateOpen;
+          }
 
-          if (validData.length > 0) {
-            validData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0])); // Xếp thời gian cũ đến mới
-            const open = parseFloat(validData[0][1]);
+          let max = -Infinity;
+          let maxTs = 0;
+          let min = Infinity;
+          let minTs = 0;
+          
+          validData.forEach((c: any) => {
+            const ts = parseInt(c[0]);
+            const high = parseFloat(c[2]);
+            const low = parseFloat(c[3]);
+            if (high > max) { max = high; maxTs = ts; }
+            if (low < min) { min = low; minTs = ts; }
+          });
 
-            let max = -Infinity;
-            let maxTs = 0;
-            let min = Infinity;
-            let minTs = 0;
-
-            validData.forEach((c: any) => {
-              const ts = parseInt(c[0]);
-              const high = parseFloat(c[2]);
-              const low = parseFloat(c[3]);
-
-              if (high > max) { max = high; maxTs = ts; }
-              if (low < min) { min = low; minTs = ts; }
-            });
-
-            const phaseOpens = [0, 0, 0, 0];
-            const pStep = durationMs / 16;
-            for (let i = 0; i < 4; i++) {
+          const phaseOpens = [0, 0, 0, 0];
+          const pStep = durationMs / 16;
+          for (let i = 0; i < 4; i++) {
+            if (i === 0 && accurateOpen > 0) {
+              phaseOpens[i] = accurateOpen; // Đồng bộ pha 1 luôn khớp với giá mở cửa tổng
+            } else {
               const pStartTs = start.getTime() + pStep * (i * 4);
               const pCandle = validData.find((c: any) => parseInt(c[0]) >= pStartTs);
               if (pCandle) {
                 phaseOpens[i] = parseFloat(pCandle[1]);
               }
             }
-
-            setPhaseData({ max, maxTs, min, minTs, open, phaseOpens });
           }
 
-          // ===== TÍNH TOÁN CÁC MŨI TÊN BÁO TĂNG GIẢM 50% =====
+          setPhaseData({ max, maxTs, min, minTs, open, phaseOpens });
+
+          // ===== TÍNH TOÁN CÁC MŨI TÊN BÁO TĂNG GIẢM =====
           const getStats = (pStart: number, pEnd: number) => {
             const pData = allData.filter((c: any) => {
                const ts = parseInt(c[0]);
@@ -448,60 +444,58 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
             });
             if (pData.length === 0) return null;
             pData.sort((a: any, b: any) => parseInt(a[0]) - parseInt(b[0]));
-
             const o = parseFloat(pData[0][1]);
-            const c = parseFloat(pData[pData.length - 1][4]); 
-            let h = -Infinity;
-            let l = Infinity;
+            const closeVal = parseFloat(pData[pData.length - 1][4]); 
+            let highVal = -Infinity;
+            let lowVal = Infinity;
             pData.forEach((cd: any) => {
                const high = parseFloat(cd[2]);
                const low = parseFloat(cd[3]);
-               if (high > h) h = high;
-               if (low < l) l = low;
+               if (high > highVal) highVal = high;
+               if (low < lowVal) lowVal = low;
             });
-            return { open: o, close: c, high: h, low: l };
+            return { open: o, close: closeVal, high: highVal, low: lowVal };
           };
 
           const calcArr = (stats: any) => {
             if (!stats) return null;
-            const { open, close, high, low } = stats;
-            if (close >= open) { // Nến Xanh
-              const threshold = open + (high - open) * 0.5;
+            const { open: oVal, close, high, low } = stats;
+            if (close >= oVal) { 
+              const threshold = oVal + (high - oVal) * 0.5;
               return close >= threshold ? ['UP', 'UP'] : ['DOWN', 'UP'];
-            } else { // Nến Đỏ
-              const threshold = open - (open - low) * 0.5;
+            } else { 
+              const threshold = oVal - (oVal - low) * 0.5;
               return close <= threshold ? ['DOWN', 'DOWN'] : ['UP', 'DOWN'];
             }
           };
 
-          const pStep = durationMs / 16;
           setArrowStates({
             prev: calcArr(getStats(start.getTime() - durationMs, start.getTime())),
-            p1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 4)), // Quý 1
-            p2: calcArr(getStats(start.getTime() + pStep * 4, start.getTime() + pStep * 8)), // Quý 2
-            p3: calcArr(getStats(start.getTime() + pStep * 8, start.getTime() + pStep * 12)), // Quý 3
-            p4: calcArr(getStats(start.getTime() + pStep * 12, end.getTime())), // Quý 4
-            half1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 8)), // 1/2 Nửa đầu
-            half2: calcArr(getStats(start.getTime() + pStep * 8, end.getTime())), // 1/2 Nửa sau
+            p1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 4)), 
+            p2: calcArr(getStats(start.getTime() + pStep * 4, start.getTime() + pStep * 8)), 
+            p3: calcArr(getStats(start.getTime() + pStep * 8, start.getTime() + pStep * 12)), 
+            p4: calcArr(getStats(start.getTime() + pStep * 12, end.getTime())), 
+            half1: calcArr(getStats(start.getTime(), start.getTime() + pStep * 8)), 
+            half2: calcArr(getStats(start.getTime() + pStep * 8, end.getTime())), 
           });
+        } else if (accurateOpen > 0) {
+          // Fallback an toàn nếu API chính gặp lỗi nghẽn nhưng đã có giá mở cửa từ API phụ
+          setPhaseData(prev => ({ ...prev, open: accurateOpen, phaseOpens: [accurateOpen, 0, 0, 0] }));
         }
       } catch (error) {
         console.error("Lỗi fetch timeline data:", error);
       }
     };
     fetchTimelineData();
-  }, [start, end]);
+  }, [start, end, title]);
 
   // ===== TÍNH TOÁN LOGIC MŨI TÊN DÀNH CHO TIÊU ĐỀ =====
   const o = phaseData.open;
   const c = currentPrice;
-  // Cập nhật High/Low realtime vào đỉnh đáy cũ của Phase
   const h = Math.max(phaseData.max, isNaN(c) ? -Infinity : c);
   const l = Math.min(phaseData.min, isNaN(c) ? Infinity : c);
-
   let headerArrows: string[] | null = null;
   let isUpPrice = true;
-
   if (o > 0 && !isNaN(c) && c > 0) {
     isUpPrice = c >= o;
     if (c >= o) {
@@ -512,14 +506,12 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
       headerArrows = c <= threshold ? ['DOWN', 'DOWN'] : ['UP', 'DOWN'];
     }
   }
-  // ====================================================
 
   let progress = ((now.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100;
   progress = Math.max(0, Math.min(100, progress)); 
   
   const totalTicks = 16;
   const step = (end.getTime() - start.getTime()) / totalTicks;
-
   const phases = [
     { label: "1/4 đầu", color: "#93c5fd", range: [0, 4] },
     { label: "1/4 thứ 2", color: "#86efac", range: [4, 8] },
@@ -537,11 +529,9 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
 
   return (
     <div style={styles.timelineRow}>
-      {/* HEADER CỦA TIMELINE (Đã bổ sung Mũi tên & Giá hiện tại) */}
       <div style={styles.timelineHeader}>
         <div style={{ ...styles.label, display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <span>{title} {o > 0 ? `- Mở cửa: ${o.toLocaleString()}` : ""}</span>
-          
           {headerArrows && (
             <>
               <span style={{ color: "red", fontWeight: "bold" }}>-</span>
@@ -552,7 +542,6 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
           )}
         </div>
       </div>
-
       <div style={styles.responsiveGrid}>
         {phases.map((phase, phaseIdx) => {
           const [startIdx, endIdx] = phase.range;
@@ -561,18 +550,15 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
           
           const phaseStartTs = start.getTime() + step * startIdx;
           const phaseEndTs = start.getTime() + step * endIdx;
-
           const isNowInPhase = progress >= phaseStartPercent && (progress < phaseEndPercent || (phaseIdx === 3 && progress === 100));
           
           let relativeProgress = ((progress - phaseStartPercent) / (phaseEndPercent - phaseStartPercent)) * 100;
           relativeProgress = Math.max(0, Math.min(100, relativeProgress));
-
           const isMaxInPhase = phaseData.maxTs >= phaseStartTs && (phaseData.maxTs < phaseEndTs || (phaseIdx === 3 && phaseData.maxTs <= phaseEndTs));
           const isMinInPhase = phaseData.minTs >= phaseStartTs && (phaseData.minTs < phaseEndTs || (phaseIdx === 3 && phaseData.minTs <= phaseEndTs));
-
           const maxRelative = isMaxInPhase ? ((phaseData.maxTs - phaseStartTs) / (phaseEndTs - phaseStartTs)) * 100 : 0;
           const minRelative = isMinInPhase ? ((phaseData.minTs - phaseStartTs) / (phaseEndTs - phaseStartTs)) * 100 : 0;
-
+          
           const ticks = [];
           for (let i = startIdx; i <= endIdx; i++) {
             const t = new Date(start.getTime() + step * i);
@@ -599,43 +585,31 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
                 ))}
                 
                 <div style={{ ...styles.bar, background: phase.color, opacity: isNowInPhase ? 1 : 0.6 }}>
-                  
-                  {/* 1. MŨI TÊN CHU KỲ TRƯỚC NẰM Ở MÉP NGOÀI CÙNG BÊN TRÁI PHA 1 */}
                   {phaseIdx === 0 && (
                     <ArrowIcon types={arrowStates.prev} positionStyle={styles.prevArrowsWrapper} />
                   )}
-
-                  {/* 2. MŨI TÊN 1/2 NỬA ĐẦU (NẰM TRÊN KHE GIỮA Q1 - Q2) */}
                   {phaseIdx === 0 && (
                     <ArrowIcon types={arrowStates.half1} positionStyle={styles.halfArrowsWrapper} />
                   )}
-
-                  {/* 3. MŨI TÊN 1/2 NỬA SAU (NẰM TRÊN KHE GIỮA Q3 - Q4) */}
                   {phaseIdx === 2 && (
                     <ArrowIcon types={arrowStates.half2} positionStyle={styles.halfArrowsWrapper} />
                   )}
-
                   {isMaxInPhase && (
                     <>
                       <div style={{ ...styles.maxDot, left: `${maxRelative}%` }}></div>
                       <div style={{ ...styles.maxText, left: `${maxRelative}%` }}>MAX {phaseData.max.toLocaleString()}</div>
                     </>
                   )}
-
                   <div style={styles.phaseText}>
                     {phase.label} {phaseData.phaseOpens[phaseIdx] > 0 ? `- Mở cửa: ${phaseData.phaseOpens[phaseIdx].toLocaleString()}` : ""}
                   </div>
-
-                  {/* MŨI TÊN CỦA TỪNG QUÝ NẰM GÓC PHẢI TRONG KHUNG */}
                   <ArrowIcon types={getPhaseArrows(phaseIdx)} positionStyle={styles.phaseArrowsWrapper} />
-
                   {isMinInPhase && (
                     <>
                       <div style={{ ...styles.minDot, left: `${minRelative}%` }}></div>
                       <div style={{ ...styles.minText, left: `${minRelative}%` }}>MIN {phaseData.min.toLocaleString()}</div>
                     </>
                   )}
-
                   {isNowInPhase && (
                     <>
                       <div style={{ ...styles.line, left: `${relativeProgress}%` }}></div>
@@ -657,7 +631,7 @@ function Timeline({ title, start, end, now, currentPrice }: { title: string; sta
   );
 }
 
-// ===== PHẦN STYLE =====
+// ===== PHẦN STYLE (GIỮ NGUYÊN HOÀN TOÀN STYLE CŨ) =====
 const styles: any = {
   introBox: {
     marginBottom: "15px",
@@ -715,7 +689,6 @@ const styles: any = {
   },
   qkay: { color: "#2563eb" },
   time: { color: "#2563eb", fontSize: "14px", marginTop: "5px" },
-
   topCardWrapper: { padding: "0 10%", marginTop: "20px" },
   topCard: { 
     display: "flex", 
@@ -743,14 +716,12 @@ const styles: any = {
   
   changePercentBox: { display: "flex", gap: "10px", alignItems: "center", marginTop: "6px" },
   badge: { padding: "2px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: "bold" },
-
   timeFrameBox: { display: "flex", gap: 10, paddingLeft: "10%", marginTop: "40px", alignItems: "center" },
   clockIcon: { position: "relative", width: 24, height: 24 },
   clockCircle: { border: "2px solid #555", borderRadius: "50%", width: "100%", height: "100%" },
   hourHand: { width: 2, height: 7, background: "#555", position: "absolute", top: 5, left: "50%", transform: "translateX(-50%)" },
   minuteHand: { width: 2, height: 10, background: "#555", position: "absolute", top: 2, left: "50%", transform: "translateX(-50%) rotate(45deg)" },
   timeFrameTitle: { color: "#a855f7", fontWeight: "bold", fontSize: "22px" },
-
   timelineRow: { marginTop: 30, padding: "0 10%" },
   
   timelineHeader: { 
@@ -762,16 +733,13 @@ const styles: any = {
   responsiveGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "45px 10px" },
   phaseContainer: { marginBottom: "30px", marginTop: "30px" },
   timelineContent: { position: "relative", width: "100%" },
-
   bar: { display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "40px", borderRadius: "8px", border: "1px solid #94a3b8", position: "relative" },
   phaseText: { color: "#2563eb", fontWeight: "bold", fontSize: "12px", zIndex: 1, textAlign: "center", padding: "0 5px" },
   
   line: { position: "absolute", top: -5, bottom: -5, width: 2, background: "#ef4444", zIndex: 5, borderRadius: "2px" },
-
-  // CÁC STYLE VỊ TRÍ MŨI TÊN MỚI
   prevArrowsWrapper: {
     position: "absolute",
-    left: "-19px", // Đẩy ra rìa trái khung
+    left: "-19px", 
     top: "50%",
     transform: "translateY(-50%)",
     display: "flex",
@@ -780,7 +748,7 @@ const styles: any = {
   },
   phaseArrowsWrapper: {
     position: "absolute",
-    right: "10px", // Neo sát mép phải khung (bên trong khối)
+    right: "10px", 
     top: "50%",
     transform: "translateY(-50%)",
     display: "flex",
@@ -789,14 +757,13 @@ const styles: any = {
   },
   halfArrowsWrapper: {
     position: "absolute",
-    right: "19px", // Neo ngay đúng mép cạnh của khung (5px là nửa cái khe 10px)
-    top: "-35px",  // Đẩy lơ lửng lên phía trên khung
-    transform: "translateX(50%)", // Đẩy ra chính giữa phần khe trống
+    right: "19px", 
+    top: "-35px",  
+    transform: "translateX(50%)", 
     display: "flex",
     gap: "6px",
     zIndex: 10
   },
-
   tick: { 
     position: "absolute", 
     bottom: "100%", 
@@ -812,7 +779,6 @@ const styles: any = {
     zIndex: 3 
   },
   dot: { width: "4px", height: "4px", background: "#777", borderRadius: "50%", marginTop: "4px" },
-
   rangeTextContainer: { 
     display: "flex", 
     justifyContent: "space-between", 
@@ -835,7 +801,6 @@ const styles: any = {
     fontWeight: "bold",
     boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
   },
-
   maxDot: {
     position: "absolute",
     top: "-6px", 
@@ -850,7 +815,6 @@ const styles: any = {
     color: "#16a34a", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10,
     background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" 
   },
-
   minDot: {
     position: "absolute",
     bottom: "-6px",
