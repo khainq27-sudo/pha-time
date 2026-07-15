@@ -31,19 +31,17 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // 2. Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m trong ngày hiện tại - Chuyển sang Binance để chính xác)
+  // 2. Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m trong ngày hiện tại)
   useEffect(() => {
     let ignore = false; 
     
     const fetchChartData = async () => {
       try {
         const currentTime = new Date();
-        // Tính mốc 7h sáng VN (00:00 UTC) của ngày hiện tại
         const uY = currentTime.getUTCFullYear();
         const uM = currentTime.getUTCMonth();
         const uD = currentTime.getUTCDate();
         const startDayTs = Date.UTC(uY, uM, uD);
-
         const res = await fetch(
           `https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=5m&startTime=${startDayTs}&limit=500`,
           { cache: "no-store" }
@@ -52,7 +50,6 @@ export default function Home() {
         
         if (ignore) return; 
         if (Array.isArray(json) && json.length > 0) {
-          // Binance format: [time, open, high, low, close, volume, ...]
           const validData = json.map((candle: any[]) => parseFloat(candle[4]));
           setChartData(validData);
         }
@@ -70,7 +67,7 @@ export default function Home() {
     };
   }, [coin]);
 
-  // 3. WebSocket lấy giá realtime và giá mở cửa ngày (Giữ nguyên OKX cho realtime)
+  // 3. WebSocket lấy giá realtime (OKX)
   useEffect(() => {
     let ws: WebSocket;
     let reconnectTimeout: NodeJS.Timeout;
@@ -91,7 +88,6 @@ export default function Home() {
         if (ignore) return; 
         
         const data = JSON.parse(event.data);
-        
         if (data.arg && data.arg.instId !== `${coin}-USDT`) return;
         if (data.data && data.data.length > 0) {
           const ticker = data.data[0];
@@ -148,28 +144,22 @@ export default function Home() {
     diffStr = `${sign}${pct}% (${sign}${diff.toFixed(1)} USDT)`;
   }
 
-  // ===== HÀM HỖ TRỢ LẤY MỐC THỜI GIAN (Dùng UTC để chuẩn xác 7h sáng VN = 00:00 UTC) =====
-  // Tránh hoàn toàn lỗi lệch múi giờ trên trình duyệt của người dùng
+  // ===== HÀM HỖ TRỢ LẤY MỐC THỜI GIAN =====
   const uY = now.getUTCFullYear();
   const uM = now.getUTCMonth();
   const uD = now.getUTCDate();
   
   const getAnchorUTC = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d, 0, 0, 0));
-
   let startYear = getAnchorUTC(uY, 0, 1);
   const endYear = getAnchorUTC(uY + 1, 0, 1);
-
   let hMonth = uM >= 6 ? 6 : 0;
   let startHalf = getAnchorUTC(uY, hMonth, 1);
   const endHalf = getAnchorUTC(uY, hMonth + 6, 1);
-
   let qMonth = Math.floor(uM / 3) * 3;
   let quarterStart = getAnchorUTC(uY, qMonth, 1);
   const quarterEnd = getAnchorUTC(uY, qMonth + 3, 1);
-
   let startMonth = getAnchorUTC(uY, uM, 1);
   const endMonth = getAnchorUTC(uY, uM + 1, 1);
-
   let startDay = getAnchorUTC(uY, uM, uD);
   const endDay = new Date(startDay.getTime() + 86400000);
   
@@ -303,7 +293,6 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   const getY = (val: number) => height - ((val - min) / (max - min)) * height;
   const pathD = `M ${chartData.map((d, i) => `${getX(i)},${getY(d)}`).join(" L ")}`;
   const openY = getY(openPrice);
-
   return (
     <div style={{ width: "100%", height: "100px", position: "relative" }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
@@ -387,16 +376,14 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
       const durationMs = end.getTime() - start.getTime();
       const days = durationMs / 86400000;
       
-      // Chuyển sang dùng API Binance cho Timeline để đảm bảo lịch sử chuẩn xác 100% 
-      // và cho phép limit tới 1000 nến, phủ kín cả chu kỳ Năm mà không bị thiếu dữ liệu.
       let interval = "15m";
-      if (days > 180) interval = "1d";       // Năm
-      else if (days > 90) interval = "12h";  // 6 Tháng
-      else if (days > 30) interval = "4h";   // 3 Tháng
-      else if (days > 14) interval = "1h";   // 1 Tháng
-      else if (days > 5) interval = "15m";   // 1 Tuần
-      else if (days > 3) interval = "15m";   // 5 Ngày
-      else interval = "5m";                  // <= 3 Ngày
+      if (days > 180) interval = "1d";       
+      else if (days > 90) interval = "12h";  
+      else if (days > 30) interval = "4h";   
+      else if (days > 14) interval = "1h";   
+      else if (days > 5) interval = "15m";   
+      else if (days > 3) interval = "15m";   
+      else interval = "5m";                  
       
       try {
         const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${interval}&startTime=${start.getTime()}&endTime=${end.getTime()}&limit=1000`, { cache: "no-store" });
@@ -404,7 +391,6 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
         
         if (ignore) return; 
         if (Array.isArray(json) && json.length > 0) {
-          // Lấy chính xác nến đầu tiên tính từ start.getTime()
           const firstCandle = json.find((c: any) => parseInt(c[0]) >= start.getTime()) || json[0];
           const exactOpen = parseFloat(firstCandle[1]);
           
@@ -423,17 +409,31 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
           
           const phaseOpens = [0, 0, 0, 0];
           const pStep = durationMs / 16;
+          const currentTs = now.getTime();
+
           for (let i = 0; i < 4; i++) {
             const pStartTs = start.getTime() + pStep * (i * 4);
-            const pCandle = json.find((c: any) => parseInt(c[0]) >= pStartTs);
-            if (pCandle) {
-              phaseOpens[i] = parseFloat(pCandle[1]);
+            
+            // CHỈ XỬ LÝ NẾU PHÂN TƯ NÀY ĐÃ HOẶC ĐANG DIỄN RA
+            if (pStartTs <= currentTs) {
+              // Tìm cây nến có timestamp gần nhất với điểm mốc của 1/4 (sai lệch nhỏ hơn kích thước nến)
+              const pCandle = json.find((c: any) => {
+                const candleTs = parseInt(c[0]);
+                return candleTs >= pStartTs;
+              });
+              if (pCandle) {
+                phaseOpens[i] = parseFloat(pCandle[1]);
+              }
+            } else {
+              // Nếu chưa tới giờ thì ép cứng về 0 để không render ra màn hình
+              phaseOpens[i] = 0;
             }
           }
           
           setPhaseData({ max, maxTs, min, minTs, open: exactOpen, phaseOpens });
 
           const getStats = (pStart: number, pEnd: number) => {
+            if (pStart > currentTs) return null; // Chưa tới mốc thời gian này
             const pData = json.filter((c: any) => {
                const ts = parseInt(c[0]);
                return ts >= pStart && ts < pEnd;
@@ -464,7 +464,6 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
             }
           };
 
-          // Đối với mũi tên prev (kỳ trước), fetch riêng 1 request 
           let prevArr = null;
           try {
             const prevRes = await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${interval}&startTime=${start.getTime() - durationMs}&endTime=${start.getTime()}&limit=1000`);
@@ -500,7 +499,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
     
     fetchTimelineData();
     return () => { ignore = true; };
-  }, [start, end, coin]); 
+  }, [start, end, coin, now]); 
 
   const o = phaseData.open;
   const c = currentPrice;
@@ -559,7 +558,6 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
           )}
         </div>
       </div>
-
       <div style={styles.responsiveGrid}>
         {phases.map((phase, phaseIdx) => {
           const [startIdx, endIdx] = phase.range;
@@ -587,6 +585,9 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
             });
           }
 
+          const currentTs = now.getTime();
+          const isPhaseFuture = phaseStartTs > currentTs; // Đánh dấu nếu phần tư hoàn toàn ở tương lai
+
           return (
             <div key={phaseIdx} style={styles.phaseContainer}>
               <div style={styles.timelineContent}>
@@ -607,19 +608,21 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
                   {phaseIdx === 0 && <ArrowIcon types={arrowStates.half1} positionStyle={styles.halfArrowsWrapper} />}
                   {phaseIdx === 2 && <ArrowIcon types={arrowStates.half2} positionStyle={styles.halfArrowsWrapper} />}
                   
-                  {isMaxInPhase && o > 0 && (
+                  {isMaxInPhase && o > 0 && !isPhaseFuture && (
                     <>
                       <div style={{ ...styles.maxDot, left: `${maxRelative}%` }}></div>
                       <div style={{ ...styles.maxText, left: `${maxRelative}%` }}>MAX {phaseData.max.toLocaleString()}</div>
                     </>
                   )}
+                  
+                  {/* CHỈ HIỂN THỊ MỞ CỬA KHI NÓ ĐÃ HOẶC ĐANG DIỄN RA VÀ GIÁ > 0 */}
                   <div style={styles.phaseText}>
-                    {phase.label} {phaseData.phaseOpens[phaseIdx] > 0 ? `- Mở cửa: ${phaseData.phaseOpens[phaseIdx].toLocaleString()}` : ""}
+                    {phase.label} {!isPhaseFuture && phaseData.phaseOpens[phaseIdx] > 0 ? `- Mở cửa: ${phaseData.phaseOpens[phaseIdx].toLocaleString()}` : ""}
                   </div>
                   
-                  <ArrowIcon types={getPhaseArrows(phaseIdx)} positionStyle={styles.phaseArrowsWrapper} />
+                  {!isPhaseFuture && <ArrowIcon types={getPhaseArrows(phaseIdx)} positionStyle={styles.phaseArrowsWrapper} />}
                   
-                  {isMinInPhase && o > 0 && (
+                  {isMinInPhase && o > 0 && !isPhaseFuture && (
                     <>
                       <div style={{ ...styles.minDot, left: `${minRelative}%` }}></div>
                       <div style={{ ...styles.minText, left: `${minRelative}%` }}>MIN {phaseData.min.toLocaleString()}</div>
@@ -646,7 +649,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
   );
 }
 
-// ===== PHẦN STYLE =====
+// ===== PHẦN STYLE (Giữ nguyên cấu trúc ban đầu của bạn) =====
 const styles: any = {
   coinSelect: {
     padding: "4px 10px",
@@ -776,6 +779,3 @@ const styles: any = {
   minDot: { position: "absolute", bottom: "-6px", transform: "translateX(-50%)", width: "12px", height: "12px", background: "#ef4444", borderRadius: "50%", border: "2px solid #fff", zIndex: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.3)" },
   minText: { position: "absolute", top: "calc(100% + 25px)", transform: "translateX(-50%)", color: "#dc2626", fontSize: "11px", fontWeight: "bold", whiteSpace: "nowrap", zIndex: 10, background: "rgba(255,255,255,0.85)", padding: "2px 6px", borderRadius: "4px" },
 };
-
-
-
