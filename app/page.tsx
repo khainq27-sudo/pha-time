@@ -31,30 +31,39 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // 2. Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m trong ngày hiện tại)
+  // 2. Fetch dữ liệu nến cho biểu đồ sóng (Candles 5m trong ngày hiện tại - Chuyển sang OKX)
   useEffect(() => {
     let ignore = false; 
     
     const fetchChartData = async () => {
       try {
         const currentTime = new Date();
+        // Tính mốc 7h sáng VN (00:00 UTC) của ngày hiện tại
         const uY = currentTime.getUTCFullYear();
         const uM = currentTime.getUTCMonth();
         const uD = currentTime.getUTCDate();
         const startDayTs = Date.UTC(uY, uM, uD);
+        
+        // OKX limit max 300, 1 ngày có 288 nến 5m nên 1 request là đủ
         const res = await fetch(
-          `https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=5m&startTime=${startDayTs}&limit=500`,
+          `https://www.okx.com/api/v5/market/history-candles?instId=${coin}-USDT&bar=5m&limit=300`,
           { cache: "no-store" }
         );
         const json = await res.json();
         
         if (ignore) return; 
-        if (Array.isArray(json) && json.length > 0) {
-          const validData = json.map((candle: any[]) => parseFloat(candle[4]));
+        if (json.code === "0" && json.data && json.data.length > 0) {
+          // OKX format: [ts, open, high, low, close, volume, ...] (Mới nhất đứng trước)
+          // Ta lọc các nến từ đầu ngày, sau đó đảo ngược lại (cũ -> mới) cho biểu đồ
+          const validData = json.data
+            .filter((candle: any[]) => parseInt(candle[0]) >= startDayTs)
+            .reverse()
+            .map((candle: any[]) => parseFloat(candle[4]));
+            
           setChartData(validData);
         }
       } catch (error) {
-        console.error("Lỗi fetch dữ liệu sóng:", error);
+        console.error("Lỗi fetch dữ liệu sóng OKX:", error);
       }
     };
     
@@ -67,11 +76,12 @@ export default function Home() {
     };
   }, [coin]);
 
-  // 3. WebSocket lấy giá realtime (OKX)
+  // 3. WebSocket lấy giá realtime và giá mở cửa ngày (OKX)
   useEffect(() => {
     let ws: WebSocket;
     let reconnectTimeout: NodeJS.Timeout;
     let ignore = false; 
+
     const connectWebSocket = () => {
       ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
       ws.onopen = () => {
@@ -88,6 +98,7 @@ export default function Home() {
         if (ignore) return; 
         
         const data = JSON.parse(event.data);
+        
         if (data.arg && data.arg.instId !== `${coin}-USDT`) return;
         if (data.data && data.data.length > 0) {
           const ticker = data.data[0];
@@ -144,7 +155,7 @@ export default function Home() {
     diffStr = `${sign}${pct}% (${sign}${diff.toFixed(1)} USDT)`;
   }
 
-  // ===== HÀM HỖ TRỢ LẤY MỐC THỜI GIAN =====
+  // ===== HÀM HỖ TRỢ LẤY MỐC THỜI GIAN (Dùng UTC để chuẩn xác 7h sáng VN = 00:00 UTC) =====
   const uY = now.getUTCFullYear();
   const uM = now.getUTCMonth();
   const uD = now.getUTCDate();
@@ -152,14 +163,18 @@ export default function Home() {
   const getAnchorUTC = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d, 0, 0, 0));
   let startYear = getAnchorUTC(uY, 0, 1);
   const endYear = getAnchorUTC(uY + 1, 0, 1);
+
   let hMonth = uM >= 6 ? 6 : 0;
   let startHalf = getAnchorUTC(uY, hMonth, 1);
   const endHalf = getAnchorUTC(uY, hMonth + 6, 1);
+
   let qMonth = Math.floor(uM / 3) * 3;
   let quarterStart = getAnchorUTC(uY, qMonth, 1);
   const quarterEnd = getAnchorUTC(uY, qMonth + 3, 1);
+
   let startMonth = getAnchorUTC(uY, uM, 1);
   const endMonth = getAnchorUTC(uY, uM + 1, 1);
+
   let startDay = getAnchorUTC(uY, uM, uD);
   const endDay = new Date(startDay.getTime() + 86400000);
   
@@ -202,6 +217,7 @@ export default function Home() {
             Link đăng ký Binance: Nhấp tại đây
           </a>
         </div>
+
         <div style={styles.topCard}>
           <div style={styles.candleInfoSide}>
             <div style={styles.candleBox}>
@@ -277,6 +293,7 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   if (!data || data.length === 0 || isNaN(openPrice)) return null;
   const chartData = [...data];
   if (!isNaN(currentPrice)) chartData[chartData.length - 1] = currentPrice;
+
   const minData = Math.min(...chartData, openPrice);
   const maxData = Math.max(...chartData, openPrice);
   
@@ -284,15 +301,19 @@ function WaveChart({ data, openPrice, currentPrice }: { data: number[]; openPric
   const padding = range * 0.2; 
   const min = minData - padding;
   const max = maxData + padding;
+
   const isGreen = currentPrice >= openPrice;
   const color = isGreen ? "#22c55e" : "#ef4444"; 
+
   const width = 800; 
   const height = 150;
   
   const getX = (index: number) => (index / (chartData.length - 1)) * width;
   const getY = (val: number) => height - ((val - min) / (max - min)) * height;
+
   const pathD = `M ${chartData.map((d, i) => `${getX(i)},${getY(d)}`).join(" L ")}`;
   const openY = getY(openPrice);
+
   return (
     <div style={{ width: "100%", height: "100px", position: "relative" }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
@@ -313,6 +334,7 @@ function ArrowIcon({ types, positionStyle }: { types: string[] | null, positionS
   const length = "14px";      
   const headWidth = "4px";    
   const headHeight = "7px";  
+
   return (
     <div style={positionStyle}>
       {types.map((type, i) => {
@@ -372,34 +394,54 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
 
   useEffect(() => {
     let ignore = false; 
+    
     const fetchTimelineData = async () => {
       const durationMs = end.getTime() - start.getTime();
       const days = durationMs / 86400000;
       
-      let interval = "15m";
-      if (days > 180) interval = "1d";       
-      else if (days > 90) interval = "12h";  
-      else if (days > 30) interval = "4h";   
-      else if (days > 14) interval = "1h";   
-      else if (days > 5) interval = "15m";   
-      else if (days > 3) interval = "15m";   
-      else interval = "5m";                  
+      // Chuyển sang dùng chuẩn Khung thời gian (bar) của OKX
+      let okxBar = "15m";
+      if (days > 180) okxBar = "1D";       
+      else if (days > 90) okxBar = "12H";  
+      else if (days > 30) okxBar = "4H";   
+      else if (days > 14) okxBar = "1H";   
+      else if (days > 5) okxBar = "15m";   
+      else if (days > 3) okxBar = "15m";   
+      else okxBar = "5m";                  
       
       try {
-        const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${interval}&startTime=${start.getTime()}&endTime=${end.getTime()}&limit=1000`, { cache: "no-store" });
-        const json = await res.json();
+        let allData: any[] = [];
+        let currentAfter = end.getTime() + 1000; 
         
-        if (ignore) return; 
-        if (Array.isArray(json) && json.length > 0) {
-          const firstCandle = json.find((c: any) => parseInt(c[0]) >= start.getTime()) || json[0];
+        // Loop fetch OKX (Do OKX max 300 record/request). Fetch tối đa 4 lần (1200 nến)
+        for (let i = 0; i < 4; i++) {
+          const res = await fetch(`https://www.okx.com/api/v5/market/history-candles?instId=${coin}-USDT&bar=${okxBar}&after=${currentAfter}&limit=300`, { cache: "no-store" });
+          const json = await res.json();
+          
+          if (ignore) return; 
+          if (json.code !== "0" || !json.data || json.data.length === 0) break;
+          
+          const valid = json.data.filter((c: any) => parseInt(c[0]) >= start.getTime() && parseInt(c[0]) <= end.getTime());
+          allData = [...allData, ...valid];
+          
+          const oldestTs = parseInt(json.data[json.data.length - 1][0]);
+          if (json.data.length < 300 || oldestTs <= start.getTime()) {
+            break;
+          }
+          currentAfter = oldestTs;
+        }
+
+        // OKX trả về nến mới nhất đứng trước, cần reverse để có mảng cũ -> mới
+        const jsonAsc = allData.reverse();
+        
+        if (jsonAsc.length > 0) {
+          const firstCandle = jsonAsc.find((c: any) => parseInt(c[0]) >= start.getTime()) || jsonAsc[0];
           const exactOpen = parseFloat(firstCandle[1]);
           
-          let max = -Infinity;
-          let maxTs = 0;
-          let min = Infinity;
-          let minTs = 0;
+          let max = -Infinity; let maxTs = 0;
+          let min = Infinity; let minTs = 0;
           
-          json.forEach((c: any) => {
+          jsonAsc.forEach((c: any) => {
             const ts = parseInt(c[0]);
             const high = parseFloat(c[2]);
             const low = parseFloat(c[3]);
@@ -409,40 +451,25 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
           
           const phaseOpens = [0, 0, 0, 0];
           const pStep = durationMs / 16;
-          const currentTs = now.getTime();
-
           for (let i = 0; i < 4; i++) {
             const pStartTs = start.getTime() + pStep * (i * 4);
-            
-            // CHỈ XỬ LÝ NẾU PHÂN TƯ NÀY ĐÃ HOẶC ĐANG DIỄN RA
-            if (pStartTs <= currentTs) {
-              // Tìm cây nến có timestamp gần nhất với điểm mốc của 1/4 (sai lệch nhỏ hơn kích thước nến)
-              const pCandle = json.find((c: any) => {
-                const candleTs = parseInt(c[0]);
-                return candleTs >= pStartTs;
-              });
-              if (pCandle) {
-                phaseOpens[i] = parseFloat(pCandle[1]);
-              }
-            } else {
-              // Nếu chưa tới giờ thì ép cứng về 0 để không render ra màn hình
-              phaseOpens[i] = 0;
+            const pCandle = jsonAsc.find((c: any) => parseInt(c[0]) >= pStartTs);
+            if (pCandle) {
+              phaseOpens[i] = parseFloat(pCandle[1]);
             }
           }
           
           setPhaseData({ max, maxTs, min, minTs, open: exactOpen, phaseOpens });
 
           const getStats = (pStart: number, pEnd: number) => {
-            if (pStart > currentTs) return null; // Chưa tới mốc thời gian này
-            const pData = json.filter((c: any) => {
+            const pData = jsonAsc.filter((c: any) => {
                const ts = parseInt(c[0]);
                return ts >= pStart && ts < pEnd;
             });
             if (pData.length === 0) return null;
             const o = parseFloat(pData[0][1]);
             const c = parseFloat(pData[pData.length - 1][4]); 
-            let h = -Infinity;
-            let l = Infinity;
+            let h = -Infinity; let l = Infinity;
             pData.forEach((cd: any) => {
                const high = parseFloat(cd[2]);
                const low = parseFloat(cd[3]);
@@ -464,15 +491,34 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
             }
           };
 
+          // Fetch nến của kỳ trước
           let prevArr = null;
           try {
-            const prevRes = await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin}USDT&interval=${interval}&startTime=${start.getTime() - durationMs}&endTime=${start.getTime()}&limit=1000`);
-            const prevJson = await prevRes.json();
-            if (Array.isArray(prevJson) && prevJson.length > 0) {
-              const o = parseFloat(prevJson[0][1]);
-              const c = parseFloat(prevJson[prevJson.length - 1][4]); 
+            let prevData: any[] = [];
+            let pAfter = start.getTime();
+            const prevStart = start.getTime() - durationMs;
+            
+            for (let i = 0; i < 4; i++) {
+              const prevRes = await fetch(`https://www.okx.com/api/v5/market/history-candles?instId=${coin}-USDT&bar=${okxBar}&after=${pAfter}&limit=300`, { cache: "no-store" });
+              const pJson = await prevRes.json();
+              if (pJson.code !== "0" || !pJson.data || pJson.data.length === 0) break;
+              
+              const valid = pJson.data.filter((c: any) => parseInt(c[0]) >= prevStart && parseInt(c[0]) < start.getTime());
+              prevData = [...prevData, ...valid];
+              
+              const oldestTs = parseInt(pJson.data[pJson.data.length - 1][0]);
+              if (pJson.data.length < 300 || oldestTs <= prevStart) {
+                break;
+              }
+              pAfter = oldestTs;
+            }
+
+            const prevJsonAsc = prevData.reverse();
+            if (prevJsonAsc.length > 0) {
+              const o = parseFloat(prevJsonAsc[0][1]);
+              const c = parseFloat(prevJsonAsc[prevJsonAsc.length - 1][4]); 
               let h = -Infinity; let l = Infinity;
-              prevJson.forEach((cd: any) => {
+              prevJsonAsc.forEach((cd: any) => {
                 const high = parseFloat(cd[2]);
                 const low = parseFloat(cd[3]);
                 if (high > h) h = high;
@@ -493,18 +539,19 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
           });
         }
       } catch (error) {
-        console.error("Lỗi fetch timeline data:", error);
+        console.error("Lỗi fetch timeline data OKX:", error);
       }
     };
     
     fetchTimelineData();
     return () => { ignore = true; };
-  }, [start, end, coin, now]); 
+  }, [start, end, coin]); 
 
   const o = phaseData.open;
   const c = currentPrice;
   const h = Math.max(phaseData.max, isNaN(c) ? -Infinity : c);
   const l = Math.min(phaseData.min, isNaN(c) ? Infinity : c);
+  
   let headerArrows: string[] | null = null;
   let isUpPrice = true;
   
@@ -524,6 +571,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
   
   const totalTicks = 16;
   const step = (end.getTime() - start.getTime()) / totalTicks;
+  
   const phases = [
     { label: "1/4 đầu", color: "#93c5fd", range: [0, 4] },
     { label: "1/4 thứ 2", color: "#86efac", range: [4, 8] },
@@ -558,6 +606,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
           )}
         </div>
       </div>
+
       <div style={styles.responsiveGrid}>
         {phases.map((phase, phaseIdx) => {
           const [startIdx, endIdx] = phase.range;
@@ -566,12 +615,15 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
           
           const phaseStartTs = start.getTime() + step * startIdx;
           const phaseEndTs = start.getTime() + step * endIdx;
+          
           const isNowInPhase = progress >= phaseStartPercent && (progress < phaseEndPercent || (phaseIdx === 3 && progress === 100));
           
           let relativeProgress = ((progress - phaseStartPercent) / (phaseEndPercent - phaseStartPercent)) * 100;
           relativeProgress = Math.max(0, Math.min(100, relativeProgress));
+
           const isMaxInPhase = phaseData.maxTs >= phaseStartTs && (phaseData.maxTs < phaseEndTs || (phaseIdx === 3 && phaseData.maxTs <= phaseEndTs));
           const isMinInPhase = phaseData.minTs >= phaseStartTs && (phaseData.minTs < phaseEndTs || (phaseIdx === 3 && phaseData.minTs <= phaseEndTs));
+          
           const maxRelative = isMaxInPhase ? ((phaseData.maxTs - phaseStartTs) / (phaseEndTs - phaseStartTs)) * 100 : 0;
           const minRelative = isMinInPhase ? ((phaseData.minTs - phaseStartTs) / (phaseEndTs - phaseStartTs)) * 100 : 0;
           
@@ -584,9 +636,6 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
               hour: formatVNTime(t),
             });
           }
-
-          const currentTs = now.getTime();
-          const isPhaseFuture = phaseStartTs > currentTs; // Đánh dấu nếu phần tư hoàn toàn ở tương lai
 
           return (
             <div key={phaseIdx} style={styles.phaseContainer}>
@@ -608,26 +657,26 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
                   {phaseIdx === 0 && <ArrowIcon types={arrowStates.half1} positionStyle={styles.halfArrowsWrapper} />}
                   {phaseIdx === 2 && <ArrowIcon types={arrowStates.half2} positionStyle={styles.halfArrowsWrapper} />}
                   
-                  {isMaxInPhase && o > 0 && !isPhaseFuture && (
+                  {isMaxInPhase && o > 0 && (
                     <>
                       <div style={{ ...styles.maxDot, left: `${maxRelative}%` }}></div>
                       <div style={{ ...styles.maxText, left: `${maxRelative}%` }}>MAX {phaseData.max.toLocaleString()}</div>
                     </>
                   )}
-                  
-                  {/* CHỈ HIỂN THỊ MỞ CỬA KHI NÓ ĐÃ HOẶC ĐANG DIỄN RA VÀ GIÁ > 0 */}
+
                   <div style={styles.phaseText}>
-                    {phase.label} {!isPhaseFuture && phaseData.phaseOpens[phaseIdx] > 0 ? `- Mở cửa: ${phaseData.phaseOpens[phaseIdx].toLocaleString()}` : ""}
+                    {phase.label} {phaseData.phaseOpens[phaseIdx] > 0 ? `- Mở cửa: ${phaseData.phaseOpens[phaseIdx].toLocaleString()}` : ""}
                   </div>
                   
-                  {!isPhaseFuture && <ArrowIcon types={getPhaseArrows(phaseIdx)} positionStyle={styles.phaseArrowsWrapper} />}
+                  <ArrowIcon types={getPhaseArrows(phaseIdx)} positionStyle={styles.phaseArrowsWrapper} />
                   
-                  {isMinInPhase && o > 0 && !isPhaseFuture && (
+                  {isMinInPhase && o > 0 && (
                     <>
                       <div style={{ ...styles.minDot, left: `${minRelative}%` }}></div>
                       <div style={{ ...styles.minText, left: `${minRelative}%` }}>MIN {phaseData.min.toLocaleString()}</div>
                     </>
                   )}
+
                   {isNowInPhase && (
                     <>
                       <div style={{ ...styles.line, left: `${relativeProgress}%` }}></div>
@@ -649,7 +698,7 @@ function Timeline({ title, start, end, now, currentPrice, coin }: { title: strin
   );
 }
 
-// ===== PHẦN STYLE (Giữ nguyên cấu trúc ban đầu của bạn) =====
+// ===== PHẦN STYLE =====
 const styles: any = {
   coinSelect: {
     padding: "4px 10px",
